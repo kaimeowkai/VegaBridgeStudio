@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 — Native debugging and API tools preview
+
+- Native source breakpoints, continue/pause, stepping, call stack, source preview, locals and expandable registers through Windows CodeLLDB and a matching target lldb-server.
+- Session-owned developer executable launch and cleanup; dedicated loopback bridge forwarding. Actual x86_64 Vega VM and Studio GUI checks.
+- Native Windows APMF IDL-to-C++ generation using external SDK tools, with private host-shell and dependency-file compatibility. Originals remain intact; signed or unexpected SDK JARs are refused.
+- Read-only SDK header/contract/library browser; configurable include directories, link libraries and debug-symbol compilation. SDK APMF linker-script integration.
+- Separate debugger/platform API settings and native code samples. No proprietary SDK materials or private sessions are bundled.
+
+This release qualifies standalone native debugging and an APMF base-library program. Installed-app native attachment, JavaScript debugging and individual privileged platform services remain future work. The 0.1.0 and 0.2.0 downloads are preserved.
+
 ## 0.2.0 — Integrated development preview
 
 - Official app-owned ChatGPT sign-in, account selection, model catalog, refresh and sign-out; API-key/local-endpoint options remain available.

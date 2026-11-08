@@ -1,6 +1,6 @@
 import re
 from .theme import editor_color
-from PySide6.QtCore import Qt, QRect, QSize
+from PySide6.QtCore import Qt, QRect, QSize, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QSyntaxHighlighter, QTextCharFormat, QTextFormat
 from PySide6.QtWidgets import QWidget, QPlainTextEdit, QTextEdit
 
@@ -44,11 +44,25 @@ class Gutter(QWidget):
     def paintEvent(self, event):
         self.editor.paint_gutter(event)
 
+    def mousePressEvent(self,event):
+        if event.button()==Qt.MouseButton.LeftButton:
+            block=self.editor.firstVisibleBlock()
+            y=event.position().y()
+            while block.isValid():
+                top=self.editor.blockBoundingGeometry(block).translated(self.editor.contentOffset()).top()
+                if top<=y<top+self.editor.blockBoundingRect(block).height():
+                    self.editor.toggle_breakpoint(block.blockNumber()+1)
+                    return
+                block=block.next()
+
 
 class CodeEditor(QPlainTextEdit):
+    breakpointsChanged=Signal(object)
     def __init__(self, path=None):
         super().__init__()
         self.path = path
+        self.breakpoints=set()
+        self.debug_line=None
         self.setFont(QFont("Cascadia Code", 11))
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.setTabStopDistance(self.fontMetrics().horizontalAdvance(" ") * 2)
@@ -61,7 +75,19 @@ class CodeEditor(QPlainTextEdit):
         self.highlight_line()
 
     def gutter_width(self):
-        return 20 + self.fontMetrics().horizontalAdvance("9") * len(str(max(1, self.blockCount())))
+        return 34 + self.fontMetrics().horizontalAdvance("9") * len(str(max(1, self.blockCount())))
+
+    def toggle_breakpoint(self,line=None):
+        line=line or self.textCursor().blockNumber()+1
+        if line in self.breakpoints:self.breakpoints.remove(line)
+        else:self.breakpoints.add(line)
+        self.gutter.update()
+        self.breakpointsChanged.emit(sorted(self.breakpoints))
+
+    def set_debug_line(self,line=None):
+        self.debug_line=line
+        self.highlight_line()
+        self.gutter.update()
 
     def refresh_theme(self):
         self.syntax.rehighlight()
@@ -93,6 +119,10 @@ class CodeEditor(QPlainTextEdit):
         bottom = top + int(self.blockBoundingRect(block).height())
         while block.isValid() and top <= event.rect().bottom():
             if block.isVisible() and bottom >= event.rect().top():
+                if number+1 in self.breakpoints:
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(QColor('#e65a62'))
+                    painter.drawEllipse(3,top+3,10,10)
                 painter.setPen(QColor(editor_color('muted', "#718397")))
                 painter.drawText(0, top, self.gutter.width() - 10, self.fontMetrics().height(), Qt.AlignmentFlag.AlignRight, str(number + 1))
             block = block.next()
@@ -105,7 +135,17 @@ class CodeEditor(QPlainTextEdit):
         selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
         selection.cursor = self.textCursor()
         selection.cursor.clearSelection()
-        self.setExtraSelections([selection])
+        selections=[selection]
+        if self.debug_line and 1<=self.debug_line<=self.blockCount():
+            stopped=QTextEdit.ExtraSelection()
+            stopped.format.setBackground(QColor('#72531c'))
+            stopped.format.setForeground(QColor('#ffffff'))
+            stopped.format.setProperty(QTextFormat.Property.FullWidthSelection,True)
+            stopped.cursor=self.textCursor()
+            stopped.cursor.setPosition(self.document().findBlockByNumber(self.debug_line-1).position())
+            stopped.cursor.clearSelection()
+            selections.append(stopped)
+        self.setExtraSelections(selections)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Tab and not event.modifiers():

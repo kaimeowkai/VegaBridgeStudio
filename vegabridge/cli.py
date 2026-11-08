@@ -8,6 +8,15 @@ from .process import Runner
 
 
 def main(argv=None):
+    raw=list(sys.argv[1:] if argv is None else argv)
+    if raw[:1]==['_idl-preprocess']:
+        from .apmf_codegen import preprocess
+        try:
+            if len(raw)<2:raise ValueError('Missing native preprocessor')
+            sys.stdout.buffer.write(preprocess(raw[1],raw[2:],Runner()))
+            return 0
+        except Exception as error:
+            print(str(error),file=sys.stderr);return 1
     parser=argparse.ArgumentParser(prog='VegaBridgeCLI', description='Windows-native Vega project, build, package and device tools')
     parser.add_argument('--json', action='store_true')
     sub=parser.add_subparsers(dest='command',required=True)
@@ -27,7 +36,9 @@ def main(argv=None):
     install=sub.add_parser('install');install.add_argument('package',type=Path);install.add_argument('--device',required=True);install.add_argument('--launch',default='')
     run=sub.add_parser('run');run.add_argument('component');run.add_argument('--device',required=True)
     wake=sub.add_parser('keep-awake');wake.add_argument('--device',required=True);wake.add_argument('--minutes',type=int,default=30)
-    compile=sub.add_parser('compile');compile.add_argument('source',type=Path);compile.add_argument('-o','--output',type=Path,required=True);compile.add_argument('--arch',choices=['armv7','aarch64','x86_64'],default='armv7');compile.add_argument('--shared',action='store_true')
+    compile=sub.add_parser('compile');compile.add_argument('source',type=Path);compile.add_argument('-o','--output',type=Path,required=True);compile.add_argument('--arch',choices=['armv7','aarch64','x86_64'],default='armv7');compile.add_argument('--shared',action='store_true');compile.add_argument('--debug',action='store_true');compile.add_argument('-I','--include',action='append',default=[]);compile.add_argument('-l','--library',action='append',default=[])
+    sdk=sub.add_parser('sdk');sdk.add_argument('--arch',choices=['armv7','aarch64','x86_64'],default='x86_64');sdk.add_argument('--search',default='')
+    api=sub.add_parser('api-codegen');api.add_argument('packages',nargs='+');api.add_argument('-o','--output',type=Path,required=True);api.add_argument('--arch',choices=['armv7','aarch64','x86_64'],default='x86_64')
     codegen=sub.add_parser('codegen');codegen.add_argument('source',type=Path);codegen.add_argument('-o','--output',type=Path,required=True);codegen.add_argument('--namespace',default='MyModule')
     bytecode=sub.add_parser('bytecode');bytecode.add_argument('source',type=Path);bytecode.add_argument('-o','--output',type=Path,required=True)
     args=parser.parse_args(argv)
@@ -54,10 +65,16 @@ def main(argv=None):
             result=verify_package(args.package,settings,runner)
         elif args.command=='compile':
             from .native_build import compile_source
-            result={'nativeArtifact':compile_source(args.source,args.output,settings,runner,args.arch,args.shared)}
+            result={'nativeArtifact':compile_source(args.source,args.output,settings,runner,args.arch,args.shared,args.debug,args.include,args.library)}
+        elif args.command=='sdk':
+            from .sdk_catalog import catalog_sdk
+            result=catalog_sdk(settings.get('sdk_root',''),args.arch,args.search,api_root=settings.get('api_root',''))
         elif args.command=='codegen':
             from .codegen import generate_module
             result=generate_module(args.source,args.output,settings,runner,args.namespace)
+        elif args.command=='api-codegen':
+            from .apmf_codegen import generate_api
+            result=generate_api(args.output,args.packages,settings,runner,args.arch)
         elif args.command=='bytecode':
             from .codegen import compile_bytecode
             result=compile_bytecode(args.source,args.output,settings,runner)

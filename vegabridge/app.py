@@ -125,6 +125,14 @@ class SettingsDialog(QDialog):
         field(sdk, "Matching Windows Hermes compiler (optional)", "hermes", True)
         field(sdk, "Windows OpenSSL (CMS verification)", "openssl", True)
         field(sdk, "TurboModule generator cli.js (optional)", "codegen", True)
+        debugger = page("Native debugger", "External CodeLLDB tools. The target lldb-server must match both the program architecture and the Windows adapter's LLDB version.")
+        field(debugger, "Windows CodeLLDB (codelldb.exe)", "debug_adapter", True)
+        field(debugger, "Target Linux lldb-server", "debug_server", True)
+        api = page("Platform APIs", "External owner-supplied SDK files. C++ binding generation uses native Windows Java, LLVM and Git for Windows. Generated SDK bindings stay in your project.")
+        field(api, "API root (architecture/include, lib)", "api_root", "folder")
+        field(api, "Windows Java (SDK-compatible JDK)", "java", True)
+        field(api, "Git for Windows shell (sh.exe)", "git_sh", True)
+        field(api, "SDK APMF compiler (apmfc.jar)", "apmfc", True)
         appearance = page("Appearance", "Choose a theme. Matrix uses neon green text on black backgrounds, including the editor and output panes.")
         theme = QComboBox()
         theme.addItems(THEMES)
@@ -398,6 +406,16 @@ class Studio(AgentHost, QMainWindow):
         em.addWidget(button("Amazon emulator documentation", lambda: QDesktopServices.openUrl(QUrl("https://developer.amazon.com/docs/vega/2.0/run-apps"))))
         em.addStretch()
         self.center.addTab(emulator, "Emulator")
+        from .debug_panel import NativeDebugPane
+        self.debugger=NativeDebugPane(self)
+        self.center.addTab(self.debugger,'Native debugger')
+        self.center.addTab(self.debugger.sdk,'SDK browser')
+        debug_menu=self.menuBar().addMenu('Debug')
+        for title,key,fn in [('Start / Continue','F5',lambda:self.debugger.control('continue') if self.debugger.session else self.debugger.start()),
+                ('Toggle breakpoint','F9',self.debugger.toggle_breakpoint),('Step over','F10',lambda:self.debugger.control('next')),
+                ('Step into','F11',lambda:self.debugger.control('stepIn')),('Step out','Shift+F11',lambda:self.debugger.control('stepOut')),
+                ('Stop debugger','Shift+F5',self.debugger.stop_session)]:
+            action=QAction(title,self);action.setShortcut(key);action.triggered.connect(fn);debug_menu.addAction(action)
 
     def _create_project_dock(self):
         dock = QDockWidget("PROJECT", self)
@@ -520,6 +538,7 @@ class Studio(AgentHost, QMainWindow):
         tools.addAction("SDK setup check…", self.check_environment)
         tools.addAction("Compile C / C++ source…", self.compile_native_source)
         tools.addAction("Generate TurboModule C++ from TypeScript…", self.generate_native_module)
+        tools.addAction("Generate platform API C++ bindings…", self.generate_platform_api)
         tools.addAction("Compile JavaScript to Hermes bytecode…", self.generate_bytecode)
         tools.addAction("ChatGPT accounts…", self.show_chatgpt_accounts)
         tools.addAction("Open local data folder", lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(user_dir()))))
@@ -540,6 +559,17 @@ class Studio(AgentHost, QMainWindow):
         if ok:
             settings=dict(self.settings)
             self.start_job('Generate native TurboModule scaffolding',lambda runner,delta:generate_module(source,destination,settings,runner,namespace))
+
+    def generate_platform_api(self):
+        from .apmf_codegen import generate_api
+        destination=QFileDialog.getExistingDirectory(self,'Choose an empty API output folder',str(self.project or Path.home()))
+        if not destination:return
+        packages,ok=QInputDialog.getText(self,'Platform API packages','IDL packages, separated by commas:',text='com.amazon.apmf')
+        if not ok:return
+        arch,ok=QInputDialog.getItem(self,'API architecture','Matching SDK architecture:',['x86_64','armv7','aarch64'],0,False)
+        if ok:
+            settings=dict(self.settings);names=[p.strip() for p in packages.split(',') if p.strip()]
+            self.start_job('Generate platform API C++ bindings',lambda runner,delta:generate_api(destination,names,settings,runner,arch))
 
     def generate_bytecode(self):
         from .codegen import compile_bytecode
@@ -652,12 +682,20 @@ class Studio(AgentHost, QMainWindow):
         arch, ok = QInputDialog.getItem(self, "Vega target architecture", "Target", ["armv7", "aarch64", "x86_64"], 0, False)
         if not ok:
             return
-        kind, ok = QInputDialog.getItem(self, "Native output", "Build as", ["Executable", "Shared library"], 0, False)
-        if not ok:
-            return
-        destination, _ = QFileDialog.getSaveFileName(self, "Native ELF output", str(Path(source).with_suffix('.so' if kind=='Shared library' else '.elf')))
+        dialog=QDialog(self);dialog.setWindowTitle('Native build options');form=QFormLayout(dialog)
+        kind=QComboBox();kind.addItems(['Executable','Shared library']);form.addRow('Output',kind)
+        debug=QCheckBox('Keep source symbols and disable optimization');form.addRow('Debug build',debug)
+        includes=QLineEdit();includes.setPlaceholderText('Optional include directories separated by semicolons');form.addRow('Extra includes',includes)
+        libraries=QLineEdit();libraries.setPlaceholderText('Library names, e.g. apmf; separated by commas');form.addRow('Link libraries',libraries)
+        form.addRow(label('Configured platform API headers and library search paths are included automatically. API use still requires its documented manifest contracts and privileges.'))
+        controls=QDialogButtonBox(QDialogButtonBox.StandardButton.Ok|QDialogButtonBox.StandardButton.Cancel);controls.accepted.connect(dialog.accept);controls.rejected.connect(dialog.reject);form.addRow(controls)
+        if not dialog.exec():return
+        shared=kind.currentText()=='Shared library'
+        destination,_=QFileDialog.getSaveFileName(self,'Native ELF output',str(Path(source).with_suffix('.so' if shared else '.elf')))
         if destination:
-            self.start_job("Windows C/C++ cross-compilation", lambda runner, delta: compile_source(source, destination, dict(self.settings), runner, arch, kind=='Shared library'))
+            inc=[p.strip() for p in includes.text().split(';') if p.strip()];libs=[p.strip() for p in libraries.text().split(',') if p.strip()]
+            debug_build=debug.isChecked();settings=dict(self.settings)
+            self.start_job('Windows C/C++ cross-compilation',lambda runner,delta:compile_source(source,destination,settings,runner,arch,shared,debug_build,inc,libs))
 
     def validate_vpkg(self):
         from .package import verify_package
@@ -720,6 +758,9 @@ class Studio(AgentHost, QMainWindow):
         return self.save_all() if answer == QMessageBox.StandardButton.Save else True
 
     def open_project(self, folder,carry_conversation=False,allow_agent=False):
+        if hasattr(self,'debugger') and self.debugger.session:
+            QMessageBox.information(self,'Debugger active','Stop the native debugger before changing projects.')
+            return
         if any(not job.background and not (allow_agent and job is self.ai_job) for job in self.jobs):
             QMessageBox.information(self, "Tasks running", "Finish or cancel running tasks before changing projects.")
             return
@@ -773,6 +814,7 @@ class Studio(AgentHost, QMainWindow):
             self.editors.setCurrentWidget(editor)
             editor.document().modificationChanged.connect(lambda dirty: self.mark_dirty(editor, dirty))
             editor.cursorPositionChanged.connect(self.cursor_info)
+            editor.breakpointsChanged.connect(lambda lines,e=editor:self.debugger.breakpoints_changed(e))
         except Exception as error:
             self.error(str(error))
 
@@ -1287,6 +1329,11 @@ class Studio(AgentHost, QMainWindow):
             self.apply.setEnabled(False)
 
     def closeEvent(self, event):
+        if self.debugger.session:
+            self.debugger.stop_session()
+            self.statusBar().showMessage('Stopping native debugger. Close again after cleanup finishes.')
+            event.ignore()
+            return
         if self.jobs:
             self.cancel_tasks()
             self.statusBar().showMessage("Stopping active work. Close again after tasks finish.")
@@ -1294,6 +1341,7 @@ class Studio(AgentHost, QMainWindow):
             return
         if self.save_before_switch():
             self.save_conversation()
+            self.debugger.shutdown()
             event.accept()
         else:
             event.ignore()

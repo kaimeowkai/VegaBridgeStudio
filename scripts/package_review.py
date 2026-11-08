@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DIST = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT / "dist"
 APP = DIST / "VegaBridgeStudio"
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 
 def notices():

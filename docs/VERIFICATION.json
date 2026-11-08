@@ -1,33 +1,55 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "platform": "Windows x64",
-  "automatedTestsPassed": 54,
-  "templates": 20,
-  "originalGames": 5,
-  "themes": 10,
-  "galleryEmulatorBuildInstallAndVisibleUiChecks": 20,
-  "galleryScreenshots": 25,
-  "chatGptSignInLiveVerified": true,
-  "assistantCreateEditBuildInstallRunVerified": true,
-  "packagedAssistantToolAndPlanningRecallVerified": true,
-  "privateConversationPersistenceVerified": true,
-  "nativeCAndCppCompiledArchitectures": [
-    "armv7",
-    "aarch64",
-    "x86_64"
-  ],
-  "nativeCAndCppExecutedOn": [
-    "physical ARMv7 Fire Stick",
-    "x86_64 Vega emulator"
-  ],
-  "turboModuleScaffoldingGeneratedOnWindows": true,
-  "hermesBytecodeRenderedOn": [
-    "physical Fire Stick",
-    "Vega emulator"
-  ],
-  "cmsSignaturesMathematicallyVerified": true,
-  "authenticodeSigned": false,
-  "completeSdkApiOrDebuggerParity": false,
-  "physicalUsbSessionClaimed": false,
+  "automatedTestsPassed": 67,
+  "newMilestone": {
+    "sourceDebugging": "Standalone developer executables only",
+    "target": "Actual x86_64 Vega VM / SDK 2.0.13986",
+    "adapter": "CodeLLDB 1.12.3 / LLDB 22.1.8",
+    "guiCompileLaunchBreakpointStepStopVerified": true,
+    "localBeforeStep": 12,
+    "localAfterStep": 24,
+    "nativeBackendExitCode": 0,
+    "windowsApmfGeneratedFiles": 455,
+    "apmfBaseLibraryProgramExecuted": true,
+    "individualPlatformServicesVerified": false,
+    "installedAppNativeAttach": false,
+    "javaScriptSourceDebugger": false,
+    "sdkOriginalsPreserved": true,
+    "proprietarySdkMaterialsBundled": false,
+    "furtherPhysicalTestingWaived": true,
+    "packagedGuiBreakpointStepAndSourcePreviewVerified": true,
+    "packagedCliApiGenerationWithSpacesVerified": true,
+    "packagedCliApmfBuildAndVmExecutionVerified": true
+  },
+  "inheritedChecksFromUnchanged02Features": {
+    "templates": 20,
+    "originalGames": 5,
+    "themes": 10,
+    "galleryEmulatorBuildInstallAndVisibleUiChecks": 20,
+    "galleryScreenshots": 25,
+    "chatGptSignInLiveVerified": true,
+    "assistantCreateEditBuildInstallRunVerified": true,
+    "packagedAssistantToolAndPlanningRecallVerified": true,
+    "privateConversationPersistenceVerified": true,
+    "nativeCAndCppCompiledArchitectures": [
+      "armv7",
+      "aarch64",
+      "x86_64"
+    ],
+    "nativeCAndCppExecutedOn": [
+      "physical ARMv7 Fire Stick",
+      "x86_64 Vega emulator"
+    ],
+    "turboModuleScaffoldingGeneratedOnWindows": true,
+    "hermesBytecodeRenderedOn": [
+      "physical Fire Stick",
+      "Vega emulator"
+    ],
+    "cmsSignaturesMathematicallyVerified": true,
+    "authenticodeSigned": false,
+    "completeSdkApiOrDebuggerParity": false,
+    "physicalUsbSessionClaimed": false
+  },
   "privacy": "Personal conversations, account records, API/OAuth keys, private logs, SDK binaries and guest images are excluded; release export audits compare against app-owned private state without printing it."
 }

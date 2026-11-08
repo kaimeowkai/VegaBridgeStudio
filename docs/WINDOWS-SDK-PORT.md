@@ -20,7 +20,10 @@ VegaBridge implements selected host workflows directly on Windows. It does not r
 | Real Vega emulator | Windows QEMU/virgl/WHPX, read-only NBD image mapping and private QCOW2 overlay | SDK/VVD 2.0.13986 and QEMU 11.1 qualified path; TCG not performance-qualified |
 | VM ownership | Singleton lock plus monitor identity; GUI/CLI managed-session attach, stop and capture | Only the owned VM is controlled/captured |
 | Sample gallery | All 20 apps built, installed and visibly exercised in the actual VM; five games have progression checks | Separate physical app release checks are still necessary |
-| Source debugging | Not implemented in this preview | No source-level debugger parity is claimed |
+| Native source debugging | Windows CodeLLDB, matching target lldb-server, DAP breakpoints/stepping/stack/locals; actual x64 VM and GUI exercised | Separate developer executables; installed-app and JS/Hermes source debugging are not implemented |
+| Platform API bindings | Windows Java APMF generator with private host-path/dependency adapter; generated C++ plus libapmf executed in the VM | External SDK inputs required; service permissions and installed-app integration remain application-specific |
+
+See [native debugging and API setup](NATIVE-DEBUGGING.md) for tool versions, instructions and the exact qualification limits.
 
 The interoperability investigation inspected host binary formats/symbols, package structure and guest disk layout. The public source is the independent Windows implementation. Proprietary binaries, sysroots, guest images, inspection dumps, credentials and personal logs are excluded.
 

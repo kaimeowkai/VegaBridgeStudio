@@ -82,6 +82,8 @@ DEFAULTS = {"adb": "", "node": "", "bridge_port": 5048, "endpoint": "https://api
             "qemu": "", "vega_images": "", "vm_folder": "", "vm_port": 5573,
             "vm_accel": "whpx", "theme": "Harbor Dark", "auth_mode": "API key / local model", "auth_account": "",
             "hermes": "", "clang": "", "sysroot": "", "sdk_root": "", "openssl": "", "codegen":"",
+            "debug_adapter":"", "debug_server":"", "api_root":"",
+            "java":"", "git_sh":"", "apmfc":"",
             "chat_active":"planning", "agent_mode":"Workspace agent", "projects_folder":str(Path.home()/'VegaProjects')}
 
 
