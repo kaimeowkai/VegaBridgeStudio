@@ -1,4 +1,5 @@
 import re
+from .theme import editor_color
 from PySide6.QtCore import Qt, QRect, QSize
 from PySide6.QtGui import QColor, QFont, QPainter, QSyntaxHighlighter, QTextCharFormat, QTextFormat
 from PySide6.QtWidgets import QWidget, QPlainTextEdit, QTextEdit
@@ -7,18 +8,19 @@ from PySide6.QtWidgets import QWidget, QPlainTextEdit, QTextEdit
 class Syntax(QSyntaxHighlighter):
     def highlightBlock(self, text):
         rules = [
-            (r'\b(?:import|from|export|default|const|let|var|function|return|if|else|for|while|class|new|async|await|try|catch|throw|true|false|null|undefined|def|self|with|as|in)\b', "#c5a3ff"),
+            (r'\b(?:import|from|export|default|const|let|var|function|return|if|else|for|while|class|new|async|await|try|catch|throw|true|false|null|undefined|def|self|with|as|in|interface|type|extends|implements|readonly|public|private|protected|namespace|template|typename|struct|enum|virtual|override|constexpr|static|using|auto|void|int|double|bool|include|define)\b', "#c5a3ff"),
             (r'\b\d+(?:\.\d+)?\b', "#eebc7a"),
             (r'\b[A-Z][A-Za-z0-9_]*\b', "#8dd6e6"),
             (r'"(?:\\.|[^"\\])*"|\x27(?:\\.|[^\x27\\])*\x27|`[^`]*`', "#a8d89a"),
             (r'//.*$|#.*$', "#718597")]
         for pattern, color in rules:
             fmt = QTextCharFormat()
-            fmt.setForeground(QColor(color))
+            role = {'#c5a3ff':'keyword', '#eebc7a':'number', '#8dd6e6':'type', '#a8d89a':'string', '#718597':'muted'}[color]
+            fmt.setForeground(QColor(editor_color(role, color)))
             for match in re.finditer(pattern, text):
                 self.setFormat(match.start(), match.end() - match.start(), fmt)
         comment = QTextCharFormat()
-        comment.setForeground(QColor("#718597"))
+        comment.setForeground(QColor(editor_color('muted', "#718597")))
         self.setCurrentBlockState(0)
         start = 0 if self.previousBlockState() == 1 else text.find("/*")
         while start >= 0:
@@ -61,6 +63,11 @@ class CodeEditor(QPlainTextEdit):
     def gutter_width(self):
         return 20 + self.fontMetrics().horizontalAdvance("9") * len(str(max(1, self.blockCount())))
 
+    def refresh_theme(self):
+        self.syntax.rehighlight()
+        self.highlight_line()
+        self.gutter.update()
+
     def update_margin(self, *_):
         self.setViewportMargins(self.gutter_width(), 0, 0, 0)
 
@@ -79,14 +86,14 @@ class CodeEditor(QPlainTextEdit):
 
     def paint_gutter(self, event):
         painter = QPainter(self.gutter)
-        painter.fillRect(event.rect(), QColor("#121b26"))
+        painter.fillRect(event.rect(), QColor(editor_color('background', "#121b26")))
         block = self.firstVisibleBlock()
         number = block.blockNumber()
         top = int(self.blockBoundingGeometry(block).translated(self.contentOffset()).top())
         bottom = top + int(self.blockBoundingRect(block).height())
         while block.isValid() and top <= event.rect().bottom():
             if block.isVisible() and bottom >= event.rect().top():
-                painter.setPen(QColor("#718397"))
+                painter.setPen(QColor(editor_color('muted', "#718397")))
                 painter.drawText(0, top, self.gutter.width() - 10, self.fontMetrics().height(), Qt.AlignmentFlag.AlignRight, str(number + 1))
             block = block.next()
             top, number = bottom, number + 1
@@ -94,7 +101,7 @@ class CodeEditor(QPlainTextEdit):
 
     def highlight_line(self):
         selection = QTextEdit.ExtraSelection()
-        selection.format.setBackground(QColor("#1a2838"))
+        selection.format.setBackground(QColor(editor_color('line', "#1a2838")))
         selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
         selection.cursor = self.textCursor()
         selection.cursor.clearSelection()

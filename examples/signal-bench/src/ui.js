@@ -1,0 +1,30 @@
+import React,{useState,useEffect} from 'react';
+import {View,Text,Pressable,ScrollView,StyleSheet,useWindowDimensions,AsyncStorage,TextInput} from 'react-native';
+import {directions} from './visuals';
+const FocusContext=React.createContext(null);
+export const colors={bg:'#081624',panel:'#132d40',ink:'#eaf4fa',muted:'#a1baca',accent:'#69e8cd',gold:'#ffd482'};
+let design={edge:30,radius:14,layout:'standard',mark:'VEGABRIDGE ORIGINAL'};
+export function configureDesign(id){design=directions[id]||design;Object.assign(colors,design);}
+export function usePreferredFocus(disabled=false){const focus=React.useContext(FocusContext);const [preferred]=useState(()=>{if(focus&&!focus.claimed&&!disabled){focus.claimed=true;return true;}return false;});return preferred;}
+export function useSaved(key,initial){
+ const [value,setValue]=useState(initial),[ready,setReady]=useState(false),[error,setError]=useState('');
+ useEffect(()=>{let alive=true;AsyncStorage.getItem('vegabridge:'+key).then(raw=>{if(alive&&raw){try{setValue(JSON.parse(raw));}catch{setError('Saved data could not be read; defaults restored.');}}}).catch(()=>{if(alive)setError('Storage unavailable; this session remains usable.');}).finally(()=>{if(alive)setReady(true);});return()=>{alive=false;};},[key]);
+ useEffect(()=>{if(ready)AsyncStorage.setItem('vegabridge:'+key,JSON.stringify(value)).catch(()=>setError('Changes could not be saved.'));},[ready,value,key]);
+ return [value,setValue,ready,error];
+}
+export function useScale(){const {width,height}=useWindowDimensions();return Math.max(.25,Math.min(1,width/960,height/640));}
+export function Page({title,kicker='VEGABRIDGE ORIGINAL',children,footer='Use the directional pad to move • Select to interact • Back to return'}){
+ const focus=React.useRef({claimed:false});const {width,height}=useWindowDimensions();const scale=Math.max(.25,Math.min(1,width/960,height/640));
+ const rail=design.layout==='rail'||design.layout==='terminal';
+ return <FocusContext.Provider value={focus.current}><View style={{flex:1,backgroundColor:colors.bg,padding:design.edge*scale,flexDirection:rail?'row':'column'}}>
+ {rail?<View style={{width:130*scale,marginRight:20*scale,borderRightWidth:2*scale,borderColor:colors.accent,paddingRight:16*scale}}><Text style={{color:colors.accent,fontSize:12*scale,letterSpacing:2}}>{design.mark}</Text><Text style={{color:colors.ink,fontSize:30*scale,fontWeight:'bold',marginTop:24*scale}}>{title}</Text><Text style={{color:colors.muted,fontSize:12*scale,marginTop:25*scale}}>LOCAL / OFFLINE{design.layout==='terminal'?'\nREADY >_':''}</Text></View>:null}
+ <View style={{flex:1}}>{!rail?<View style={{borderBottomWidth:['blueprint','editorial','fieldbook','sequencer','loom'].includes(design.layout)?2*scale:0,borderColor:colors.accent,marginBottom:12*scale,paddingBottom:10*scale}}><Text style={{color:colors.accent,fontSize:12*scale,letterSpacing:3*scale}}>{design.mark||kicker}</Text><Text style={{color:colors.ink,fontSize:(design.layout==='poster'?48:34)*scale,fontWeight:design.layout==='editorial'?'normal':'bold',marginTop:9*scale}}>{title}</Text></View>:null}<ScrollView style={{flex:1}} contentContainerStyle={{padding:3*scale,paddingBottom:22*scale}}>{children}</ScrollView><Text style={{color:colors.muted,fontSize:12*scale,marginTop:8*scale}}>{footer}</Text></View></View></FocusContext.Provider>;
+}
+export function Body({children,large=false}){const s=useScale();return <Text style={{color:colors.ink,fontSize:(large?34:19)*s,marginVertical:9*s}}>{children}</Text>;}
+export function Muted({children}){const s=useScale();return <Text style={{color:colors.muted,fontSize:16*s,marginVertical:7*s}}>{children}</Text>;}
+export function Row({children}){const s=useScale();return <View style={{flexDirection:'row',flexWrap:'wrap',alignItems:'center',gap:10*s,marginVertical:8*s}}>{children}</View>;}
+export function Card({children}){const s=useScale();return <View style={{backgroundColor:colors.panel,borderRadius:design.radius*s,padding:18*s,marginVertical:8*s,borderWidth:['blueprint','terminal','loom'].includes(design.layout)?Math.max(1,s):0,borderColor:colors.accent}}>{children}</View>;}
+export function Action({children,onPress,primary=false,disabled=false,preferred=false}){const s=useScale();const focus=React.useContext(FocusContext);const [autoFocus]=useState(()=>{if(preferred){if(focus)focus.claimed=true;return true;}if(focus&&!focus.claimed&&!disabled){focus.claimed=true;return true;}return false;});return <Pressable accessibilityRole="button" accessibilityLabel={String(children)} disabled={disabled} hasTVPreferredFocus={autoFocus} onPress={onPress} style={({focused})=>({paddingHorizontal:17*s,paddingVertical:11*s,margin:3*s,borderRadius:Math.min(12,design.radius)*s,borderWidth:Math.max(1,3*s),borderColor:focused?colors.gold:primary?colors.accent:colors.muted,backgroundColor:focused||primary?colors.accent:colors.bg,opacity:disabled?.4:1})}>{({focused})=><Text style={{color:focused||primary?colors.bg:colors.ink,fontSize:17*s,fontWeight:primary?'bold':'normal'}}>{children}</Text>}</Pressable>;}
+export function Entry({value,onChangeText,placeholder}){const s=useScale();return <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={colors.muted} style={{color:colors.ink,backgroundColor:colors.bg,borderColor:colors.muted,borderWidth:1,borderRadius:7*s,fontSize:18*s,padding:10*s,marginVertical:7*s}}/>;}
+export function formatTime(seconds){const n=Math.max(0,Math.ceil(seconds));return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');}
+export function Grid({cells,columns=4,onPress,label}){const s=useScale();return <View style={{flexDirection:'row',flexWrap:'wrap',maxWidth:520*s}}>{cells.map((cell,i)=><View key={i} style={{width:(100/columns)+'%'}}>{onPress?<Action preferred={i===0} onPress={()=>onPress(i)}>{label?label(cell,i):String(cell)}</Action>:<Card><Body>{label?label(cell,i):String(cell)}</Body></Card>}</View>)}</View>;}

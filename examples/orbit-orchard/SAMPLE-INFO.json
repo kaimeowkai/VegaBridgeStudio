@@ -1,0 +1,10 @@
+{
+  "id": "orbit-orchard",
+  "title": "Orbit Orchard",
+  "category": "Game",
+  "description": "Plant drifting fruit in columns; predict the next wind before harvesting groups.",
+  "component": "OrbitOrchard",
+  "language": "JavaScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

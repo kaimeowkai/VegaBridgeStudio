@@ -2,6 +2,7 @@
 import re
 import shlex
 import uuid
+import time
 from pathlib import Path
 from .project import tool_path, package_id
 
@@ -10,6 +11,7 @@ class DeviceCommandError(RuntimeError):
     def __init__(self, code, output):
         super().__init__("Device command exited with status " + str(code) + ". See output above.")
         self.output = output
+        self.code = int(code)
 
 
 def endpoint(text):
@@ -94,19 +96,62 @@ class LocalBridge:
         self.shell("vmsgr send " + shlex.quote("pkg://" + component))
         self.runner.emit("Launch requested. Inspect lifecycle and screen to verify the app is running.")
 
+    def wait_for_app(self, component, timeout=20):
+        if not re.fullmatch(r"[a-zA-Z0-9_.-]+", component):
+            raise ValueError('Invalid component ID')
+        end=time.monotonic()+timeout
+        last=''
+        while time.monotonic()<end:
+            self.runner.check()
+            last=self.shell('vlcm list --app-id '+shlex.quote(component),timeout=8)
+            for line in last.splitlines():
+                parts=line.split()
+                if parts and parts[0]==component and 'VISIBLE' in parts:
+                    self.runner.emit('RUNNING VERIFIED: '+component+' is VISIBLE in Vega lifecycle.')
+                    return {'component':component,'state':'VISIBLE','lifecycle':line.strip()}
+            self.runner.cancelled.wait(.5)
+        raise TimeoutError('The package installed, but Vega did not report the app VISIBLE. Check Device Lab, the active Fire TV profile/display and device logs. Launch requests alone are not runtime verification.')
+
     def stop(self, identifier):
         return self.shell("vlcm terminate-app --pkg-id " + shlex.quote(package_id(identifier)) + " --force")
+
+    def type_text(self, text):
+        if not text or len(text)>1024 or '\x00' in text:
+            raise ValueError('Enter 1–1024 characters without NUL bytes')
+        import copy
+        from .process import Runner
+        private=copy.copy(self)
+        private.runner=Runner(cancelled=self.runner.cancelled)
+        private.shell('inputd-cli send_text '+shlex.quote(text),timeout=180)
+        return 'Text sent to the selected device. Content was omitted from task logs.'
+
+    def keep_awake(self, minutes=30):
+        if not 1<=minutes<=120:
+            raise ValueError('Choose a test session of 1–120 minutes')
+        self.runner.emit('Developer test wake signals active. This is input injection, not a production app wake-lock API. Stop the session or close Studio to end it.')
+        deadline=time.monotonic()+minutes*60
+        count=0
+        while time.monotonic()<deadline:
+            self.runner.check()
+            self.shell('inputd-cli button_press KEY_WAKEUP',timeout=10)
+            count+=1
+            self.runner.cancelled.wait(min(45,max(0,deadline-time.monotonic())))
+        return {'wakeSignals':count,'sessionMinutes':minutes,'changedDeviceSettings':False}
 
     def screenshot(self, destination):
         for attempt in range(3):
             remote = "/tmp/vegabridge-" + uuid.uuid4().hex + ".png"
             try:
-                self.shell("gwsi-tool-screenshooter " + remote, timeout=60)
+                # Bound execution on the target too, so cancelling the Windows
+                # client cannot strand an indefinitely waiting capture process.
+                self.shell("timeout -k 2 15 gwsi-tool-screenshooter " + remote, timeout=25)
                 self.pull(remote, destination)
                 if not Path(destination).read_bytes().startswith(b"\x89PNG\r\n\x1a\n"):
                     raise RuntimeError("Screenshot transfer was not a complete PNG")
                 return str(destination)
             except DeviceCommandError as error:
+                if error.code in {124, 137}:
+                    raise TimeoutError("The device did not produce a display capture within 15 seconds. Wake the Fire TV and check its active display/input, then try again.") from None
                 if attempt == 2 or "atomic commit failed" not in error.output.lower():
                     raise
                 self.runner.emit("Display is changing; retrying screenshot…")

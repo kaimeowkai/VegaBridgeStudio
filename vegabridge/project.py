@@ -1,4 +1,5 @@
 import json
+import hashlib
 import os
 import re
 import shutil
@@ -8,7 +9,7 @@ from .storage import atomic_write
 
 RESOURCES = Path(__file__).parent / "resources"
 SKIP = {"node_modules", ".git", ".vegabridge", "build", "stage", ".venv", "__pycache__", "private"}
-TEXT_SUFFIXES = {".js", ".jsx", ".ts", ".tsx", ".json", ".toml", ".md", ".txt", ".css", ".html", ".xml", ".yml", ".yaml", ".c", ".cpp", ".h", ".py"}
+TEXT_SUFFIXES = {".js", ".jsx", ".ts", ".tsx", ".json", ".toml", ".md", ".txt", ".css", ".html", ".xml", ".yml", ".yaml", ".c", ".cpp", ".cc", ".cxx", ".h", ".hh", ".hpp", ".cmake", ".py"}
 
 
 def package_id(value):
@@ -24,7 +25,7 @@ def inside(root, path):
     return path
 
 
-def create_project(folder, title, identifier):
+def create_project(folder, title, identifier, template_id="", language="JavaScript"):
     package_id(identifier)
     dest = Path(folder).resolve()
     if dest.exists() and any(dest.iterdir()):
@@ -46,7 +47,16 @@ def create_project(folder, title, identifier):
             text = re.sub(r'^build-number = .*$', "build-number = 1", text, flags=re.M)
         atomic_write(path, text.encode())
     (dest / ".gitignore").write_text("node_modules/\nstage/\nbuild/\n.vegabridge/\n.env*\n*.key\n*.dpapi\n", encoding="utf-8")
-    (dest / "vegabridge.json").write_text(json.dumps({"schemaVersion": 1, "template": "kepler4-js", "target": "armv7"}, indent=2), encoding="utf-8")
+    if template_id:
+        from .gallery import install_template
+        install_template(dest, template_id, identifier, language)
+    elif language == "TypeScript":
+        # Metro's configured React Native Babel preset compiles TS/TSX natively.
+        (dest / "index.js").rename(dest / "index.tsx")
+        package = json.loads((dest / "package.json").read_text())
+        package["scripts"]["bundle"] = package["scripts"]["bundle"].replace("index.js", "index.tsx")
+        (dest / "package.json").write_text(json.dumps(package, indent=2))
+    (dest / "vegabridge.json").write_text(json.dumps({"schemaVersion": 1, "template": "kepler4-js", "target": "armv7", "galleryTemplate":template_id, "language":language}, indent=2), encoding="utf-8")
     return dest
 
 
@@ -95,7 +105,13 @@ def build(root, settings, runner):
     env["PATH"] = str(node.parent) + os.pathsep + env.get("PATH", "")
     env["CI"] = "1"
     # Existing user projects may contain npm scripts. Explicit build is the execution boundary.
-    runner.run([node, npm, "ci", "--no-audit", "--no-fund"], cwd=root, env=env, timeout=900)
+    fingerprint = hashlib.sha256((root / "package-lock.json").read_bytes()).hexdigest()
+    stamp = root / "node_modules/.vegabridge-dependencies"
+    if not stamp.exists() or stamp.read_text() != fingerprint:
+        runner.run([node, npm, "ci", "--no-audit", "--no-fund"], cwd=root, env=env, timeout=900)
+        atomic_write(stamp, fingerprint.encode())
+    else:
+        runner.emit("Pinned dependencies unchanged; reusing this project's installed modules.")
     runner.run([node, RESOURCES / "patch-node-paths.cjs", root], cwd=root, env=env)
     stage = root / "stage"
     if stage.exists():

@@ -1,0 +1,10 @@
+{
+  "id": "focus-harbor",
+  "title": "Focus Harbor TV",
+  "category": "Productivity",
+  "description": "Work and break timers with persistent sessions, pause/resume and a completed-session count.",
+  "component": "FocusHarbor",
+  "language": "TypeScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

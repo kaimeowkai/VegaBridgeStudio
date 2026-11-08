@@ -1,0 +1,10 @@
+{
+  "id": "pantry-orbit",
+  "title": "Pantry Orbit",
+  "category": "Home",
+  "description": "Build a weekly meal rotation from an editable pantry shortlist.",
+  "component": "PantryOrbit",
+  "language": "JavaScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

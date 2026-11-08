@@ -1,0 +1,10 @@
+{
+  "id": "palette-dock",
+  "title": "Palette Dock",
+  "category": "Design",
+  "description": "Explore color pairs and calculate their actual WCAG contrast ratio.",
+  "component": "PaletteDock",
+  "language": "TypeScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

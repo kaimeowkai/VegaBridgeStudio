@@ -1,0 +1,10 @@
+{
+  "id": "tide-parcel",
+  "title": "Tide Parcel",
+  "category": "Game",
+  "description": "Navigate three changing tide lanes, collect parcels and save anchors for storms.",
+  "component": "TideParcel",
+  "language": "JavaScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

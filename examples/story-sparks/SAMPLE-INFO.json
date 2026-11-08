@@ -1,0 +1,10 @@
+{
+  "id": "story-sparks",
+  "title": "Story Sparks",
+  "category": "Creative",
+  "description": "Generate and save original writing prompts from combinatorial story ingredients.",
+  "component": "StorySparks",
+  "language": "JavaScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

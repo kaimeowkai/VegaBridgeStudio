@@ -1,0 +1,10 @@
+{
+  "id": "tempo-tiles",
+  "title": "Tempo Tiles",
+  "category": "Music",
+  "description": "A visual metronome with tempo and beat-group controls.",
+  "component": "TempoTiles",
+  "language": "JavaScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

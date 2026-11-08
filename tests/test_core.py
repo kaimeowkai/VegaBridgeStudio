@@ -104,7 +104,7 @@ def test_screenshot_retries_transient_display_commit(tmp_path):
             self.runner = Runner()
             self.attempts = 0
         def shell(self, command, **kwargs):
-            if command.startswith("gwsi"):
+            if "gwsi-tool-screenshooter" in command:
                 self.attempts += 1
                 if self.attempts == 1:
                     raise DeviceCommandError(1, "Screenshot error: drm: atomic commit failed")

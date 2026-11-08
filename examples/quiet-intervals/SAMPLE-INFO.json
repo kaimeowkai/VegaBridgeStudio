@@ -1,0 +1,10 @@
+{
+  "id": "quiet-intervals",
+  "title": "Quiet Intervals",
+  "category": "Wellbeing",
+  "description": "An adjustable visual pacing loop with a pause control.",
+  "component": "QuietIntervals",
+  "language": "JavaScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

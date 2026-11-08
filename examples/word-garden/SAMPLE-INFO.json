@@ -1,0 +1,10 @@
+{
+  "id": "word-garden",
+  "title": "Word Garden",
+  "category": "Learning",
+  "description": "Arrange letter tiles to uncover locally generated word clues.",
+  "component": "WordGarden",
+  "language": "TypeScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

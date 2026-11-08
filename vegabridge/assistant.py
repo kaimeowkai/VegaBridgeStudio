@@ -48,7 +48,15 @@ def stream_chat(settings, key, history, runner, delta, transport=None):
     if responses:
         body.update({"input": [{"role": "developer", "content": SYSTEM}] + history, "store": False, "max_output_tokens": 6000})
     else:
-        body.update({"messages": [{"role": "system", "content": SYSTEM}] + history, "max_tokens": 6000})
+        # Responses tool items are retained in the private history. A compatible
+        # Chat Completions endpoint receives just the human/assistant messages.
+        messages=[]
+        for item in history:
+            if item.get('role') in {'user','assistant'}:
+                content=item.get('content','')
+                if isinstance(content,list):content='\n'.join(part.get('text','') for part in content if part.get('type') in {'output_text','input_text','text'})
+                messages.append({'role':item['role'],'content':content})
+        body.update({"messages": [{"role": "system", "content": SYSTEM}] + messages, "max_tokens": 6000})
     headers = {"Content-Type": "application/json"}
     if key:
         headers["Authorization"] = "Bearer " + key

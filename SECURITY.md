@@ -1,9 +1,13 @@
 # Security and privacy
 
-Do not attach API keys, `.env` files, signing material, private app logs or personal device screenshots to public issues. Use a minimal sanitized reproduction. During this local review there is no public repository or configured private vulnerability-report address; contact the project owner privately before disclosing a sensitive issue.
+Report reproducible vulnerabilities privately to the repository owner. Do not include credentials, account records or personal transcripts in public issues.
 
-The app encrypts API keys and newly generated development signing keys with Windows CurrentUser DPAPI. It does not read ChatGPT/Codex login stores. The assistant is text-only and cannot execute suggested commands. Context attachment blocks generated/private folders and common credential patterns; this check is not a substitute for reviewing the preview.
+Windows CurrentUser DPAPI protects app-owned OAuth sessions, API keys, development signing keys, saved conversations/drafts and assistant undo backups. These live outside projects. Studio does not read another application's login store. The source and portable-package export uses an explicit allowlist; personal state is excluded.
 
-The device shell and npm build commands run with the user's local/device privileges. Build trusted projects only. The bridge listens using the installed platform-tools' own defaults; this application uses its own server port and does not deliberately expose a bridge over the network. Remote VVD uses existing SSH keys and strict host-key checking. No root access, DRM bypass, automatic firmware updates or device reset is provided.
+Workspace agent can read and edit source in the selected project, create new projects under the configured projects folder, build, install/run and control the selected developer device. It has no arbitrary shell tool or access to the private state directory. Source reads reject private/generated paths and common credential patterns; this heuristic cannot identify every private document. Select the correct project and trusted endpoint. File writes require a current hash, reject unsaved editor buffers and save a private encrypted undo record. Stop cancels pending work; operations already completed remain applied.
 
-Publication checks must inspect both the allowlisted source archive and binary distribution for secrets, internal SDK files, user data and unexpected files. Never include the local SDK analysis directory or QA workspace. Only dependency license files are collected from the build environment.
+Discussion only has no tools. Responses and compatible API calls send the user's discussion and requested source to the configured endpoint. No chat history ships with the software. Tokens, authorization headers, OAuth callbacks and provider error bodies are omitted from task output. Device screenshots remain local.
+
+Builds execute npm/project scripts under the user's Windows account. The manual device console executes with Developer Mode privileges. Use trusted projects. Studio uses its own configured ADB server port, strict SSH host-key checking for optional remote hosts, read-only source VM images and a separate writable overlay. It does not disable authentication, root devices, bypass DRM or modify firmware/security settings.
+
+CMS signature verification checks mathematics and payload integrity, not certificate-chain trust or Amazon certification. Keep existing production signing identities. The preview's self-signed development identities are not Amazon-issued production credentials.

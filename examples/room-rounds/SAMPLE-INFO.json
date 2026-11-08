@@ -1,0 +1,10 @@
+{
+  "id": "room-rounds",
+  "title": "Room Rounds",
+  "category": "Home",
+  "description": "Rotate household tasks across people and track completed rounds.",
+  "component": "RoomRounds",
+  "language": "JavaScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

@@ -1,0 +1,10 @@
+{
+  "id": "session-canvas",
+  "title": "Session Canvas",
+  "category": "Presentation",
+  "description": "Write cue cards and present them as a full-screen TV sequence.",
+  "component": "SessionCanvas",
+  "language": "JavaScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

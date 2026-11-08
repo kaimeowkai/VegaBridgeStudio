@@ -1,0 +1,10 @@
+{
+  "id": "agenda-arc",
+  "title": "Agenda Arc",
+  "category": "Productivity",
+  "description": "Plan a week using editable daily focus cards.",
+  "component": "AgendaArc",
+  "language": "TypeScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

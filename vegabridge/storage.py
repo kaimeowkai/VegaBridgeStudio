@@ -80,7 +80,9 @@ DEFAULTS = {"adb": "", "node": "", "bridge_port": 5048, "endpoint": "https://api
             "model": "gpt-6.1-sol", "protocol": "Responses", "ssh_host": "", "ssh_port": 22,
             "ssh_key": "", "vega_cli": "vega", "emulator_serial": "emulator-5554",
             "qemu": "", "vega_images": "", "vm_folder": "", "vm_port": 5573,
-            "vm_accel": "whpx"}
+            "vm_accel": "whpx", "theme": "Harbor Dark", "auth_mode": "API key / local model", "auth_account": "",
+            "hermes": "", "clang": "", "sysroot": "", "sdk_root": "", "openssl": "", "codegen":"",
+            "chat_active":"planning", "agent_mode":"Workspace agent", "projects_folder":str(Path.home()/'VegaProjects')}
 
 
 def load_settings():

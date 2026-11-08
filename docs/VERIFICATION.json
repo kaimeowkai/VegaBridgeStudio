@@ -1,0 +1,33 @@
+{
+  "version": "0.2.0",
+  "platform": "Windows x64",
+  "automatedTestsPassed": 54,
+  "templates": 20,
+  "originalGames": 5,
+  "themes": 10,
+  "galleryEmulatorBuildInstallAndVisibleUiChecks": 20,
+  "galleryScreenshots": 25,
+  "chatGptSignInLiveVerified": true,
+  "assistantCreateEditBuildInstallRunVerified": true,
+  "packagedAssistantToolAndPlanningRecallVerified": true,
+  "privateConversationPersistenceVerified": true,
+  "nativeCAndCppCompiledArchitectures": [
+    "armv7",
+    "aarch64",
+    "x86_64"
+  ],
+  "nativeCAndCppExecutedOn": [
+    "physical ARMv7 Fire Stick",
+    "x86_64 Vega emulator"
+  ],
+  "turboModuleScaffoldingGeneratedOnWindows": true,
+  "hermesBytecodeRenderedOn": [
+    "physical Fire Stick",
+    "Vega emulator"
+  ],
+  "cmsSignaturesMathematicallyVerified": true,
+  "authenticodeSigned": false,
+  "completeSdkApiOrDebuggerParity": false,
+  "physicalUsbSessionClaimed": false,
+  "privacy": "Personal conversations, account records, API/OAuth keys, private logs, SDK binaries and guest images are excluded; release export audits compare against app-owned private state without printing it."
+}

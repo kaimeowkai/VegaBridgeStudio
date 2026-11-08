@@ -1,0 +1,10 @@
+{
+  "id": "beacon-weave",
+  "title": "Beacon Weave",
+  "category": "Game",
+  "description": "Weave a target light pattern using diagonal toggle stitches.",
+  "component": "BeaconWeave",
+  "language": "JavaScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

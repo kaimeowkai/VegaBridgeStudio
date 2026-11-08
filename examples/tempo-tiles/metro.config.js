@@ -1,0 +1,15 @@
+const {getDefaultConfig,mergeConfig}=require('@react-native/metro-config');
+const {createAppBundleConfig}=require('@amazon-devices/keplerscript-commonmodules');
+const slash=p=>p.replace(/\\/g,'/');
+const base=getDefaultConfig(__dirname);
+const split=createAppBundleConfig(slash(__dirname),'interactive',base);
+const moduleId=split.serializer.createModuleIdFactory();
+const filter=split.serializer.processModuleFilter;
+const config=mergeConfig(base,split);
+config.serializer.createModuleIdFactory=()=>p=>moduleId(slash(p));
+config.serializer.processModuleFilter=m=>filter({...m,path:slash(m.path)});
+const polyfills=base.serializer.getPolyfills;
+config.serializer.getPolyfills=()=>[...polyfills(),require.resolve('./vega-compat-polyfill.js')];
+const path=require('path');
+config.resolver.resolveRequest=(context,moduleName,platform)=>moduleName==='react-native'?{type:'sourceFile',filePath:path.join(__dirname,'node_modules/@amazon-devices/react-native-kepler/index.js')}:context.resolveRequest(context,moduleName,platform);
+module.exports=config;

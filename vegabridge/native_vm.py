@@ -41,6 +41,17 @@ class NativeVm:
         self.display_name = "VegaBridge " + uuid.uuid4().hex[:8] + " — Vega OS"
         self.window_title = "QEMU (" + self.display_name + ")"
 
+    @classmethod
+    def attach_managed(cls,settings):
+        state=json.loads((user_dir()/'native-vm-session.json').read_text())
+        if not state.get('name','').startswith('VegaBridge '):raise RuntimeError('Not a Studio-managed VM session.')
+        actual=qmp_command(state['monitorPort'],'query-name')
+        if actual.get('name')!=state['name']:raise RuntimeError('VM identity changed; refusing another process.')
+        vm=cls(settings)
+        vm.pid=state['pid'];vm.monitor_port=state['monitorPort'];vm.display_name=state['name'];vm.window_title=state['windowTitle']
+        if vm.window_title!='QEMU ('+vm.display_name+')':raise RuntimeError('Invalid managed VM display identity.')
+        return vm
+
     def screenshot(self, destination):
         if not self.monitor_port:
             raise RuntimeError("The VM display is not ready yet.")
@@ -59,6 +70,27 @@ class NativeVm:
         return str(destination)
 
     def run(self, runner):
+        from PySide6.QtCore import QLockFile
+        lock=QLockFile(str(user_dir()/'native-vm-instance.lock'))
+        if not lock.tryLock(100):
+            raise RuntimeError('A VegaBridge native VM is already running. Only one VM may run at a time.')
+        try:
+            return self._run_owned(runner)
+        finally:
+            state=user_dir()/'native-vm-session.json'
+            if state.exists():
+                try:
+                    if json.loads(state.read_text()).get('name')==self.display_name:
+                        state.unlink()
+                except (OSError,ValueError):
+                    pass
+            lock.unlock()
+
+    def _started(self,pid):
+        self.pid=pid
+        atomic_write(user_dir()/'native-vm-session.json',json.dumps({'pid':pid,'name':self.display_name,'monitorPort':self.monitor_port,'windowTitle':self.window_title}).encode())
+
+    def _run_owned(self, runner):
         qemu = Path(tool_path(self.settings["qemu"], "qemu-system-x86_64.exe"))
         qimg = qemu.with_name("qemu-img.exe")
         if not qimg.is_file():
@@ -110,8 +142,20 @@ class NativeVm:
                     "-nic", f"user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:{port}-:5555"]
             runner.emit("Starting a native Windows Vega VM. Source images are read-only; guest writes go to " + str(overlay))
             runner.emit(f"After its ready screen appears, connect Device Lab to 127.0.0.1:{port}. First boot may restart during setup.")
-            runner.run(args, timeout=86400, stop=lambda: qmp_quit(monitor_port), started=lambda pid: setattr(self, "pid", pid))
+            runner.run(args, timeout=86400, stop=lambda: qmp_quit(monitor_port), started=self._started)
         finally:
             nbd.close()
             if nbd.error:
                 runner.emit("Virtual disk service error: " + nbd.error)
+
+
+def managed_vm_command(command):
+    if command not in {'query-status','quit'}:
+        raise ValueError('Unsupported VM command')
+    state=json.loads((user_dir()/'native-vm-session.json').read_text())
+    if not state['name'].startswith('VegaBridge '):
+        raise RuntimeError('This is not a Studio-managed VM')
+    actual=qmp_command(state['monitorPort'],'query-name')
+    if actual.get('name')!=state['name']:
+        raise RuntimeError('VM session identity changed. Refusing to control another process.')
+    return qmp_command(state['monitorPort'],command)

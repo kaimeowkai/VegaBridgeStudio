@@ -8,12 +8,12 @@ import sys
 import threading
 import time
 from pathlib import Path
-from PySide6.QtCore import Qt, QThread, Signal, QSortFilterProxyModel, QTimer, QUrl
+from PySide6.QtCore import Qt, QThread, Signal, Slot, QSortFilterProxyModel, QTimer, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QFont, QIcon, QPixmap, QTextCursor
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QPlainTextEdit, QTextBrowser, QLineEdit, QComboBox, QTabWidget,
     QDockWidget, QToolBar, QTreeView, QFileDialog, QDialog, QFormLayout, QDialogButtonBox,
-    QMessageBox, QSpinBox, QCheckBox, QSplitter, QGroupBox, QSizePolicy, QFileSystemModel)
+    QMessageBox, QSpinBox, QCheckBox, QSplitter, QGroupBox, QSizePolicy, QFileSystemModel, QListWidget, QListWidgetItem, QInputDialog)
 from . import __version__
 from .storage import load_settings, save_settings, SecretStore, user_dir, atomic_write
 from .process import Runner, Cancelled
@@ -23,7 +23,9 @@ from .package import inspect_package
 from .native_vm import NativeVm
 from .assistant import stream_chat, validate_url, credential_name
 from .editor import CodeEditor
-from .theme import STYLE
+from .theme import STYLE, THEMES, apply_theme
+from .conversations import ConversationStore, INTRO
+from .agent_host import AgentHost
 
 
 class Job(QThread):
@@ -117,6 +119,30 @@ class SettingsDialog(QDialog):
         field(tools, "Device bridge (adb.exe)", "adb", True)
         field(tools, "Dedicated bridge port", "bridge_port")
         tools.addRow(label("USB: enable Developer Mode, select USB connection mode, and use a data cable. Wireless: choose TCP/IP on the device. Switching connection mode may require a reboot."))
+        sdk = page("SDK tools", "Windows-native compilers and owner-supplied Vega target libraries. SDK source files remain outside the IDE distribution.")
+        field(sdk, "Windows clang++ executable", "clang", True)
+        field(sdk, "Imported SDK root (sysroot-* folders)", "sdk_root", "folder")
+        field(sdk, "Matching Windows Hermes compiler (optional)", "hermes", True)
+        field(sdk, "Windows OpenSSL (CMS verification)", "openssl", True)
+        field(sdk, "TurboModule generator cli.js (optional)", "codegen", True)
+        appearance = page("Appearance", "Choose a theme. Matrix uses neon green text on black backgrounds, including the editor and output panes.")
+        theme = QComboBox()
+        theme.addItems(THEMES)
+        theme.setCurrentText(settings["theme"])
+        self.fields["theme"] = theme
+        appearance.addRow("Theme", theme)
+        from .theme import palette,preview_html
+        preview=QLabel()
+        preview.setMinimumHeight(180)
+        preview.setContentsMargins(18,12,18,12)
+        def refresh_preview(name):
+            c=palette(name)
+            preview.setStyleSheet('background:'+c['bg']+';color:'+c['fg']+';border:1px solid '+c['border']+';border-radius:8px;')
+            preview.setText(preview_html(name))
+        theme.currentTextChanged.connect(refresh_preview)
+        refresh_preview(theme.currentText())
+        appearance.addRow(preview)
+        appearance.addRow(label('Ten included themes. The preview updates here; Save applies your choice across the workspace, editor, assistant and task output.'))
         ai = page("AI assistant", "Connect with your own API key or a local compatible model server. Requests go only to the endpoint below; account costs and limits apply.")
         field(ai, "Base URL", "endpoint")
         protocol = QComboBox()
@@ -131,9 +157,14 @@ class SettingsDialog(QDialog):
         ai.addRow("API key", self.key)
         self.forget = QCheckBox("Remove the saved API key")
         ai.addRow(self.forget)
-        ai.addRow(label("The key is encrypted with Windows CurrentUser DPAPI outside your projects. Chat history stays in memory and is cleared when you change projects. No files are attached automatically."))
+        ai.addRow(label("Keys and local conversations use Windows CurrentUser encryption outside your projects. Workspace agent can read and edit current project source and control the selected developer target; Discussion only has no tools. Project changes preserve your discussion."))
         ai.addRow(button("Open official ChatGPT integration documentation", lambda: QDesktopServices.openUrl(QUrl("https://developers.openai.com/siwc/token-sharing-open-source"))))
-        ai.addRow(label("This review build connects through API keys. Direct ChatGPT account sign-in is not implemented yet."))
+        mode = QComboBox()
+        mode.addItems(["API key / local model", "ChatGPT plan"])
+        mode.setCurrentText(settings["auth_mode"])
+        self.fields["auth_mode"] = mode
+        ai.addRow("Connection", mode)
+        ai.addRow(label("Use ChatGPT accounts in the assistant panel to sign in, select an account/model, manage usage or sign out. ChatGPT tokens are sent only to the official Responses API."))
         native = page("Native emulator", "Run Vega OS locally in Windows QEMU with your own SDK development images. No WSL, Docker or remote host is used. First boot may restart during setup.")
         field(native, "Windows QEMU executable", "qemu", True)
         field(native, "VVD image_files folder", "vega_images", "folder")
@@ -178,26 +209,48 @@ class SettingsDialog(QDialog):
             QMessageBox.warning(self, "Settings not saved", str(error))
 
 
-class Studio(QMainWindow):
+class Studio(AgentHost, QMainWindow):
+    authorization_requested = Signal(str)
+    agent_requested = Signal(object)
+    agent_ui_effect = Signal(object)
+    agent_history = Signal(object)
+
     def __init__(self, project=None):
         super().__init__()
         self.setWindowTitle("VegaBridge Studio • Native Windows Preview")
         self.resize(1540, 960)
         self.setMinimumSize(1080, 720)
         self.settings = load_settings()
+        self.authorization_requested.connect(lambda url: QDesktopServices.openUrl(QUrl(url)))
+        self.agent_requested.connect(self.prepare_agent_tool)
+        self.agent_ui_effect.connect(self.apply_agent_effect)
+        self.agent_history.connect(self.agent_checkpoint)
         self.project = None
         self.jobs = set()
         self.history = []
+        self.conversations=ConversationStore()
+        self.chat_key=self.settings.get('chat_active','planning')
+        self.conversation_label='Planning'
+        self.conversation_project=''
+        self.pending_prompt=''
+        self._conversation_loading=False
         self.last_answer = ""
         self.ai_job = None
         self.vm_job = None
         self.native_vm = None
+        self.awake_job = None
         self.source_snapshot = None
         self.last_package = None
         self._create_toolbar()
         self._create_workspace()
         self._create_project_dock()
         self._create_assistant_dock()
+        self.chat_save_timer=QTimer(self)
+        self.chat_save_timer.setSingleShot(True)
+        self.chat_save_timer.setInterval(700)
+        self.chat_save_timer.timeout.connect(self.save_conversation)
+        self.prompt.textChanged.connect(lambda:self.chat_save_timer.start())
+        self.load_conversation(self.chat_key,save_current=False)
         self._create_output_dock()
         self._create_menus()
         self.statusBar().showMessage("Ready  •  Community developer preview  •  Windows native")
@@ -205,6 +258,20 @@ class Studio(QMainWindow):
         self.statusBar().addPermanentWidget(self.cursor_status)
         if project:
             self.open_project(project)
+
+    @Slot(object)
+    def prepare_agent_tool(self,request):
+        # Register real Qt slots on the QObject subclass. A plain Python mixin
+        # callback must not be allowed to mutate widgets on an AI worker thread.
+        AgentHost.prepare_agent_tool(self,request)
+
+    @Slot(object)
+    def apply_agent_effect(self,action):
+        action()
+
+    @Slot(object)
+    def agent_checkpoint(self,history):
+        AgentHost.agent_checkpoint(self,history)
 
     def _create_toolbar(self):
         toolbar = QToolBar("Workbench")
@@ -253,9 +320,9 @@ class Studio(QMainWindow):
         welcome = QWidget()
         welcome_layout = QVBoxLayout(welcome)
         welcome_layout.setContentsMargins(42, 40, 42, 35)
-        welcome_layout.addWidget(label("VEGABRIDGE STUDIO  /  0.1 PREVIEW", "eyebrow"))
+        welcome_layout.addWidget(label("VEGABRIDGE STUDIO  /  0.2 PREVIEW", "eyebrow"))
         welcome_layout.addWidget(label("Build for Vega.\nWork from Windows.", "hero"))
-        welcome_layout.addWidget(label("A focused workspace for your project, connected device, and coding assistant. Start with the tested Kepler 4 JavaScript template."))
+        welcome_layout.addWidget(label("A focused workspace for your project, connected device, and coding assistant. Choose a JavaScript/TypeScript starter or an original sample template."))
         welcome_layout.addSpacing(20)
         for title, fn in [("Create a Vega project", self.new_project), ("Open an existing project", self.choose_project), ("Configure tools and AI", self.show_settings)]:
             control = button(title, fn, title.startswith("Create"))
@@ -263,7 +330,7 @@ class Studio(QMainWindow):
             welcome_layout.addWidget(control)
         welcome_layout.addStretch()
         welcome_layout.addWidget(label("WINDOWS BUILD   →   SIGNED VPKG   →   USB / WI-FI DEVICE", "eyebrow"))
-        welcome_layout.addWidget(label("Independent community preview. Native Windows build, device tools and Vega VM host. JS-only build support; custom native compilation remains in development. No Amazon SDK or device image is bundled."))
+        welcome_layout.addWidget(label("Independent community preview. Native Windows build, device tools and Vega VM host. JS/TS app builds, C/C++ cross compilation and TurboModule scaffolding tools. No Amazon SDK or device image is bundled."))
         self.editors.addTab(welcome, "Welcome")
         self._device_lab()
 
@@ -293,6 +360,14 @@ class Studio(QMainWindow):
         for text, key in [("Home", "KEY_HOMEPAGE"), ("Back", "KEY_BACK"), ("←", "KEY_LEFT"), ("↑", "KEY_UP"), ("OK", "KEY_ENTER"), ("↓", "KEY_DOWN"), ("→", "KEY_RIGHT")]:
             remote.addWidget(button(text, lambda checked=False, key=key: self.device_command("Remote " + key, "inputd-cli button_press " + key)))
         layout.addLayout(remote)
+        session = QHBoxLayout()
+        self.keep_awake = QCheckBox("Keep awake during testing (30 min)")
+        self.keep_awake.setToolTip("Developer mode only: sends the non-navigation WAKEUP key every 45 seconds to this target. Ends when stopped, the target changes, Studio closes, or 30 minutes elapse. Does not change sleep settings or provide a production wake-lock API.")
+        self.keep_awake.toggled.connect(self.toggle_keep_awake)
+        session.addWidget(self.keep_awake)
+        session.addWidget(button("Type text…", self.type_device_text))
+        layout.addLayout(session)
+        self.target.currentIndexChanged.connect(lambda: self.keep_awake.setChecked(False))
         actions = QHBoxLayout()
         for text, fn in [("Installed apps", lambda: self.device_command("Installed apps", "vpm list packages")), ("Running apps", lambda: self.device_command("Running apps", "vlcm list")), ("Install VPKG…", self.install_file), ("Stop project app", self.stop_app), ("Uninstall…", self.uninstall_app), ("Push file…", self.push_file), ("Pull file…", self.pull_file)]:
             actions.addWidget(button(text, fn))
@@ -354,26 +429,41 @@ class Studio(QMainWindow):
         dock.setObjectName("assistant-dock")
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.addWidget(label("Ask. Understand. Review the change.", "eyebrow"))
+        layout.addWidget(label("Ask. Build. Run.", "eyebrow"))
+        self.identity_label = label("")
+        layout.addWidget(self.identity_label)
+        layout.addWidget(button("ChatGPT accounts…", self.show_chatgpt_accounts))
+        self.refresh_assistant_identity()
         self.chat = QTextBrowser()
         self.chat.setOpenExternalLinks(False)
-        self.chat.setPlainText("Your coding partner\n\nAsk about your code, diagnose a build error, or request a change. Configure an API key or local model in Settings.\n\nFiles are shared only when you attach and preview them. Responses cannot run commands or change your device.")
+        self.chat.setPlainText(INTRO)
         layout.addWidget(self.chat, 1)
+        self.agent_mode=QComboBox()
+        self.agent_mode.addItems(['Workspace agent','Discussion only'])
+        self.agent_mode.setCurrentText(self.settings.get('agent_mode','Workspace agent'))
+        self.agent_mode.setToolTip('Workspace agent can read and edit current project source, create projects, build and control the selected developer device. Edits have private undo backups. Discussion only has no tools.')
+        def mode_changed(value):
+            self.settings['agent_mode']=value;save_settings(self.settings)
+        self.agent_mode.currentTextChanged.connect(mode_changed)
+        layout.addWidget(self.agent_mode)
         self.attach = QCheckBox("Attach current file or selection")
         layout.addWidget(self.attach)
         self.prompt = QPlainTextEdit()
-        self.prompt.setPlaceholderText("Explain this code, help fix an error, or suggest an improvement…")
+        self.prompt.setPlaceholderText("Create an app, change its design, build it, or run it on the emulator…")
         self.prompt.setFixedHeight(100)
         layout.addWidget(self.prompt)
         row = QHBoxLayout()
         self.send = button("Send", self.send_chat, True)
         row.addWidget(self.send)
-        row.addWidget(button("Clear chat", self.clear_chat))
+        row.addWidget(button("New chat", self.clear_chat))
+        row.addWidget(button("Stop",lambda:self.ai_job.cancelled.set() if self.ai_job else None))
+        layout.addWidget(button("Saved conversations…",self.choose_conversation))
         layout.addLayout(row)
         self.apply = button("Review suggested file replacement…", self.review_edit)
         self.apply.setEnabled(False)
         layout.addWidget(self.apply)
-        layout.addWidget(label("Chat is kept only for this session. API requests use your selected endpoint and account limits."))
+        layout.addWidget(label("Conversations are saved locally with Windows encryption. Creating a project preserves your planning discussion."))
+        layout.addWidget(button('Undo last assistant edit',self.undo_agent_edit))
         dock.setWidget(page)
         dock.setMinimumWidth(300)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
@@ -417,18 +507,48 @@ class Studio(QMainWindow):
         find.triggered.connect(self.find.setFocus)
         edit.addAction(find)
         edit.addAction("Settings…", self.show_settings)
+        search = QAction("Search entire project…", self)
+        search.setShortcut("Ctrl+Shift+F")
+        search.triggered.connect(self.search_workspace)
+        edit.addAction(search)
         view = self.menuBar().addMenu("View")
         for dock in self.findChildren(QDockWidget):
             view.addAction(dock.toggleViewAction())
         tools = self.menuBar().addMenu("Tools")
         tools.addAction("Inspect VPKG…", self.inspect_file)
+        tools.addAction("Validate VPKG and CMS signature…", self.validate_vpkg)
+        tools.addAction("SDK setup check…", self.check_environment)
+        tools.addAction("Compile C / C++ source…", self.compile_native_source)
+        tools.addAction("Generate TurboModule C++ from TypeScript…", self.generate_native_module)
+        tools.addAction("Compile JavaScript to Hermes bytecode…", self.generate_bytecode)
+        tools.addAction("ChatGPT accounts…", self.show_chatgpt_accounts)
         tools.addAction("Open local data folder", lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(user_dir()))))
         help_menu = self.menuBar().addMenu("Help")
-        help_menu.addAction("About", lambda: QMessageBox.information(self, "VegaBridge Studio", "VegaBridge Studio " + __version__ + "\nIndependent community preview for Windows.\nNot affiliated with Amazon or OpenAI.\n\nNative editor, JS-only Kepler 4 build/packaging, physical device tools, Windows QEMU Vega VM and API-key coding assistant. Custom native compilation and direct ChatGPT sign-in are not implemented."))
+        help_menu.addAction("About", lambda: QMessageBox.information(self, "VegaBridge Studio", "VegaBridge Studio " + __version__ + "\nIndependent Windows developer workbench.\nNot affiliated with Amazon or OpenAI.\n\nJavaScript/TypeScript app templates, Windows LLVM C/C++ cross-compilation, device tools, native Vega VM, themes and ChatGPT sign-in.\nPlatform API integration and Amazon certification still require the relevant SDK contracts and release testing."))
 
     def error(self, text):
         self.output.appendPlainText("ERROR: " + text)
         self.statusBar().showMessage(text, 12000)
+
+    def generate_native_module(self):
+        from .codegen import generate_module
+        source,_=QFileDialog.getOpenFileName(self,'Choose NativeModule TypeScript interface',str(self.project or Path.home()),'TypeScript (*.ts)')
+        if not source:return
+        destination=QFileDialog.getExistingDirectory(self,'Choose an empty output folder',str(self.project or Path.home()))
+        if not destination:return
+        namespace,ok=QInputDialog.getText(self,'C++ namespace','Namespace:',text='MyModule')
+        if ok:
+            settings=dict(self.settings)
+            self.start_job('Generate native TurboModule scaffolding',lambda runner,delta:generate_module(source,destination,settings,runner,namespace))
+
+    def generate_bytecode(self):
+        from .codegen import compile_bytecode
+        source,_=QFileDialog.getOpenFileName(self,'Choose bundled JavaScript',str(self.project or Path.home()),'JavaScript bundle (*.js *.bundle)')
+        if not source:return
+        destination,_=QFileDialog.getSaveFileName(self,'Save Hermes bytecode',str(Path(source).with_suffix('.hbc')),'Hermes bytecode (*.hbc)')
+        if destination:
+            settings=dict(self.settings)
+            self.start_job('Compile Hermes bytecode',lambda runner,delta:compile_bytecode(source,destination,settings,runner))
 
     def start_job(self, title, fn, done=None, console=False, background=False):
         self.output.appendPlainText("\n── " + title + " ──")
@@ -460,17 +580,117 @@ class Studio(QMainWindow):
         dialog = SettingsDialog(self.settings, self)
         if dialog.exec():
             self.settings = dialog.settings
+            apply_theme(QApplication.instance(), self.settings["theme"])
+            self.refresh_assistant_identity()
+
+    def show_chatgpt_accounts(self):
+        from .account_dialog import AccountDialog
+        if self.ai_job:
+            self.error("Finish or cancel the current AI request before changing accounts.")
+            return
+        AccountDialog(self).exec()
+
+    def search_workspace(self):
+        from .workspace_tools import search_project
+        if not self.project:
+            self.error("Open a project before searching.")
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Search project — Ctrl+Shift+F")
+        dialog.resize(900, 580)
+        layout = QVBoxLayout(dialog)
+        query = QLineEdit()
+        query.setPlaceholderText("Find text across source files; generated folders are excluded")
+        case = QCheckBox("Match case")
+        results = QListWidget()
+        status = label("Searches up to 5,000 source files and displays the first 1,000 results.")
+        layout.addWidget(query)
+        layout.addWidget(case)
+        layout.addWidget(results, 1)
+        layout.addWidget(status)
+        def search():
+            results.clear()
+            matches = search_project(self.project, query.text(), case.isChecked())
+            for match in matches:
+                item = QListWidgetItem(f"{match['relative']}:{match['line']}  {match['text']}")
+                item.setData(Qt.ItemDataRole.UserRole, match)
+                results.addItem(item)
+            status.setText(f"{len(matches)} matches. Double-click a result to open its line.")
+        def navigate(item):
+            match = item.data(Qt.ItemDataRole.UserRole)
+            self.open_file(Path(match['path']))
+            editor = self.current_editor()
+            if editor:
+                cursor = QTextCursor(editor.document().findBlockByNumber(match['line']-1))
+                editor.setTextCursor(cursor)
+                editor.centerCursor()
+            dialog.accept()
+        results.itemDoubleClicked.connect(navigate)
+        query.returnPressed.connect(search)
+        layout.addWidget(button("Find in project", search, True))
+        dialog.exec()
+
+    def check_environment(self):
+        from .workspace_tools import doctor
+        def done(items):
+            dialog = QDialog(self)
+            dialog.setWindowTitle("SDK setup check")
+            dialog.resize(850, 520)
+            layout = QVBoxLayout(dialog)
+            layout.addWidget(label("Checks your configured tools. Optional compiler, verifier and image prerequisites are listed separately."))
+            view = read_only('\n\n'.join(('READY  ' if item['ready'] else 'SETUP  ') + item['tool'] + '\n' + item['detail'] for item in items))
+            layout.addWidget(view)
+            layout.addWidget(button("Close", dialog.accept))
+            dialog.exec()
+        self.start_job("SDK setup check", lambda runner, delta: doctor(dict(self.settings), runner), done)
+
+    def compile_native_source(self):
+        from .native_build import compile_source
+        source, _ = QFileDialog.getOpenFileName(self, "Select C or C++ source", str(self.project or Path.home()), "C/C++ (*.cpp *.cc *.cxx *.c)")
+        if not source:
+            return
+        arch, ok = QInputDialog.getItem(self, "Vega target architecture", "Target", ["armv7", "aarch64", "x86_64"], 0, False)
+        if not ok:
+            return
+        kind, ok = QInputDialog.getItem(self, "Native output", "Build as", ["Executable", "Shared library"], 0, False)
+        if not ok:
+            return
+        destination, _ = QFileDialog.getSaveFileName(self, "Native ELF output", str(Path(source).with_suffix('.so' if kind=='Shared library' else '.elf')))
+        if destination:
+            self.start_job("Windows C/C++ cross-compilation", lambda runner, delta: compile_source(source, destination, dict(self.settings), runner, arch, kind=='Shared library'))
+
+    def validate_vpkg(self):
+        from .package import verify_package
+        path, _ = QFileDialog.getOpenFileName(self, "Validate Vega package", str(self.project/'build' if self.project else Path.home()), "Vega package (*.vpkg)")
+        if path:
+            self.start_job("Validate package", lambda runner, delta: verify_package(path, dict(self.settings), runner), lambda result: self.output.appendPlainText(json.dumps(result, indent=2)))
+
+    def refresh_assistant_identity(self):
+        mode = self.settings.get("auth_mode", "API key / local model")
+        self.identity_label.setText(("Using ChatGPT plan" if mode == "ChatGPT plan" else mode) + " · " + self.settings["model"] + '\nConversation: ' + self.conversation_label)
 
     def new_project(self):
         dialog = QDialog(self)
         dialog.setWindowTitle("Create a Vega project")
-        dialog.resize(580, 260)
+        dialog.resize(760, 460)
         form = QFormLayout(dialog)
         title = QLineEdit("My Vega App")
         identifier = QLineEdit("com.example.myvegaapp")
         folder = QLineEdit(str(Path.home() / "VegaProjects/MyVegaApp"))
         form.addRow("App title", title)
         form.addRow("Package ID", identifier)
+        from .gallery import entries
+        templates = QComboBox()
+        templates.addItem("Blank JavaScript starter", "")
+        for item in entries():
+            templates.addItem(item["category"] + " · " + item["title"], item["id"])
+        description = label("Choose a runnable starter. All 20 gallery projects include editable source and offline sample behavior.")
+        templates.currentIndexChanged.connect(lambda: description.setText(next((e["description"] for e in entries() if e["id"] == templates.currentData()), "A minimal React Native screen and remote-button counter.")))
+        form.addRow("Project template", templates)
+        form.addRow(description)
+        language = QComboBox()
+        language.addItems(["JavaScript", "TypeScript"])
+        form.addRow("App language", language)
         form.addRow("New or empty folder", folder)
         form.addRow(button("Choose folder…", lambda: folder.setText(QFileDialog.getExistingDirectory(dialog, "Choose an empty folder") or folder.text())))
         form.addRow(label("Creates a Kepler 4 JavaScript project. First build downloads its pinned npm dependencies and creates an encrypted development signing key in your local user data folder."))
@@ -481,7 +701,7 @@ class Studio(QMainWindow):
         if dialog.exec():
             try:
                 if self.save_before_switch():
-                    self.open_project(create_project(folder.text(), title.text(), identifier.text()))
+                    self.open_project(create_project(folder.text(), title.text(), identifier.text(), templates.currentData(), language.currentText()),carry_conversation=True)
             except Exception as error:
                 QMessageBox.warning(self, "Project not created", str(error))
 
@@ -499,13 +719,14 @@ class Studio(QMainWindow):
             return False
         return self.save_all() if answer == QMessageBox.StandardButton.Save else True
 
-    def open_project(self, folder):
-        if any(not job.background for job in self.jobs):
+    def open_project(self, folder,carry_conversation=False,allow_agent=False):
+        if any(not job.background and not (allow_agent and job is self.ai_job) for job in self.jobs):
             QMessageBox.information(self, "Tasks running", "Finish or cancel running tasks before changing projects.")
             return
         try:
             root = Path(folder).resolve()
             data = metadata(root)
+            self.save_conversation()
             self.project = root
             self.last_package = None
             self.project_name.setText(data["title"] + "\n" + data["id"])
@@ -514,8 +735,14 @@ class Studio(QMainWindow):
             while self.editors.count():
                 self.editors.widget(0).deleteLater()
                 self.editors.removeTab(0)
-            self.clear_chat()
-            self.open_file(root / "index.js")
+            # A conversation is independent of the selected project. Changing
+            # projects must never silently reset the user's planning context.
+            self.conversation_label=data['title']
+            self.conversation_project=str(root)
+            self.source_snapshot=None
+            self.refresh_assistant_identity()
+            self.save_conversation()
+            self.open_file(next((root/name for name in ['index.tsx','index.ts','index.js'] if (root/name).is_file()), root/'index.js'))
             self.open_file(root / "manifest.toml")
             self.editors.setCurrentIndex(0)
             self.center.setCurrentIndex(0)
@@ -773,9 +1000,40 @@ class Studio(QMainWindow):
                     return
                 self.screen.setPixmap(pixmap.scaled(self.screen.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
                 self.screen.setToolTip(path)
-            native = self.native_vm if snapshot[1]["serial"] == "127.0.0.1:" + str(self.settings["vm_port"]) else None
-            self.start_job("Capture target screen", lambda runner, delta: native.screenshot(path) if native else self.bridge(snapshot, runner).screenshot(path), show)
+            is_native=snapshot[1]['serial']=='127.0.0.1:'+str(self.settings['vm_port'])
+            native=self.native_vm
+            def capture(runner,delta):
+                if is_native:return (native or NativeVm.attach_managed(snapshot[0])).screenshot(path)
+                return self.bridge(snapshot,runner).screenshot(path)
+            self.start_job("Capture target screen",capture,show)
         except Exception as error:
+            self.error(str(error))
+
+    def type_device_text(self):
+        try:
+            snapshot=self.target_snapshot()
+            text,ok=QInputDialog.getMultiLineText(self,'Type on selected device','Focus the app’s text field first. Enter text below; it will not be written to task logs.')
+            if ok and text:
+                self.start_job('Send text to device',lambda runner,delta:self.bridge(snapshot,runner).type_text(text))
+        except Exception as error:
+            self.error(str(error))
+
+    def toggle_keep_awake(self,checked):
+        if not checked:
+            if self.awake_job:self.awake_job.cancelled.set()
+            return
+        try:
+            if self.awake_job:raise RuntimeError('The previous test wake session is still stopping. Try again in a moment.')
+            snapshot=self.target_snapshot()
+            self.awake_job=self.start_job('Developer test wake session',lambda runner,delta:self.bridge(snapshot,runner).keep_awake(30),background=True)
+            def finished():
+                self.awake_job=None
+                self.keep_awake.blockSignals(True)
+                self.keep_awake.setChecked(False)
+                self.keep_awake.blockSignals(False)
+            self.awake_job.finished.connect(finished)
+        except Exception as error:
+            self.keep_awake.setChecked(False)
             self.error(str(error))
 
     def emulator_action(self, action):
@@ -786,6 +1044,12 @@ class Studio(QMainWindow):
         if self.vm_job:
             self.error("A native VM is already running in this Studio window.")
             return
+        try:
+            self.native_vm=NativeVm.attach_managed(dict(self.settings))
+            self.output.appendPlainText('Attached to the existing Studio-managed VM. A second VM was not started.')
+            return
+        except (OSError,ValueError,RuntimeError):
+            pass
         vm = NativeVm(dict(self.settings))
         self.native_vm = vm
         self.vm_job = self.start_job("Native Windows Vega VM", lambda runner, delta: vm.run(runner), console=True, background=True)
@@ -798,6 +1062,9 @@ class Studio(QMainWindow):
         if self.vm_job:
             self.vm_job.cancelled.set()
             self.output.appendPlainText("Stopping the native VM and flushing its private overlay disk…")
+        else:
+            from .native_vm import managed_vm_command
+            self.start_job('Stop the owned native VM',lambda runner,delta:managed_vm_command('quit'))
 
     def connect_native_vm(self):
         self.address.setText("127.0.0.1:" + str(self.settings["vm_port"]))
@@ -817,9 +1084,74 @@ class Studio(QMainWindow):
         if self.ai_job:
             self.ai_job.cancelled.set()
             return
+        self.save_conversation()
+        import uuid
+        self.chat_key='chat-'+uuid.uuid4().hex
+        self.settings['chat_active']=self.chat_key
+        save_settings(self.settings)
         self.history, self.last_answer, self.source_snapshot = [], "", None
-        self.chat.setPlainText("Development assistant ready. No source files attached.\n")
+        self.pending_prompt=''
+        self.chat.setPlainText(INTRO)
+        self.prompt.clear()
         self.apply.setEnabled(False)
+        self.save_conversation()
+
+    def save_conversation(self):
+        if self._conversation_loading or not hasattr(self,'chat') or not hasattr(self,'prompt'):
+            return
+        try:
+            self.conversations.save(self.chat_key,self.conversation_label,self.history,self.chat.toPlainText(),
+                                    self.pending_prompt or self.prompt.toPlainText(),self.conversation_project)
+        except Exception as error:
+            if hasattr(self,'output'):
+                self.error('Conversation could not be saved locally: '+str(error))
+
+    def load_conversation(self,key,save_current=True):
+        if save_current:self.save_conversation()
+        data=self.conversations.load(key)
+        self._conversation_loading=True
+        try:
+            self.chat_key=key
+            self.conversation_label=data.get('label','Conversation')
+            self.conversation_project=data.get('project','')
+            self.history=data.get('history',[])
+            self.pending_prompt=''
+            self.last_answer=''
+            self.source_snapshot=None
+            self.chat.setPlainText(data.get('display') or INTRO)
+            self.prompt.blockSignals(True)
+            self.prompt.setPlainText(data.get('draft',''))
+            self.prompt.blockSignals(False)
+            self.apply.setEnabled(False)
+            self.settings['chat_active']=key
+            save_settings(self.settings)
+            self.refresh_assistant_identity()
+        finally:
+            self._conversation_loading=False
+
+    def choose_conversation(self):
+        if self.ai_job:
+            self.error('Finish or cancel the assistant before switching conversations.')
+            return
+        self.save_conversation()
+        dialog=QDialog(self)
+        dialog.setWindowTitle('Saved conversations — private to this Windows user')
+        dialog.resize(780,480)
+        layout=QVBoxLayout(dialog)
+        layout.addWidget(label('Planning chats, project conversations and archived chats are stored locally with Windows encryption. They are not part of source exports or GitHub uploads.'))
+        listing=QListWidget()
+        for item in self.conversations.list():
+            entry=QListWidgetItem(item['label']+'  ·  '+item['updatedAt'][:19].replace('T',' '))
+            entry.setData(Qt.ItemDataRole.UserRole,item['key'])
+            listing.addItem(entry)
+        layout.addWidget(listing)
+        def restore():
+            if listing.currentItem():
+                self.load_conversation(listing.currentItem().data(Qt.ItemDataRole.UserRole))
+                dialog.accept()
+        listing.itemDoubleClicked.connect(lambda _:restore())
+        layout.addWidget(button('Resume selected conversation',restore,True))
+        dialog.exec()
 
     def send_chat(self):
         prompt = self.prompt.toPlainText().strip()
@@ -827,8 +1159,14 @@ class Studio(QMainWindow):
             return
         try:
             settings = dict(self.settings)
-            key = SecretStore().get(credential_name(settings))
-            if validate_url(settings["endpoint"]) == "https://api.openai.com/v1" and not key:
+            chatgpt = settings.get("auth_mode") == "ChatGPT plan"
+            if chatgpt:
+                settings.update(endpoint="https://api.openai.com/v1", protocol="Responses")
+            agent=self.agent_mode.currentText()=='Workspace agent'
+            if agent and settings['protocol']!='Responses':
+                raise ValueError('Workspace agent needs a Responses-compatible endpoint. Change the protocol in Settings, or choose Discussion only.')
+            key = "" if chatgpt else SecretStore().get(credential_name(settings))
+            if not chatgpt and validate_url(settings["endpoint"]) == "https://api.openai.com/v1" and not key:
                 QMessageBox.information(self, "Connect the coding assistant", "Add an API key in Settings → AI assistant, or configure a locally running model. Your message has been kept. Enter credentials only in the app's password field.")
                 return
             message = prompt
@@ -854,21 +1192,37 @@ class Studio(QMainWindow):
                     return
                 snapshot = (editor.path, editor.toPlainText())
                 message += "\n\nUser-approved source context:\n" + context
-            history = self.history[-12:] + [{"role": "user", "content": message}]
+            history = self.history + [{"role": "user", "content": message}]
             cursor = self.chat.textCursor()
             cursor.movePosition(QTextCursor.MoveOperation.End)
             cursor.insertText("\nYOU\n" + prompt + "\n\nASSISTANT\n")
             self.chat.setTextCursor(cursor)
+            self.pending_prompt=prompt
             self.prompt.clear()
             self.send.setEnabled(False)
             self.apply.setEnabled(False)
             self.source_snapshot = snapshot
             self.last_answer = ""
             def done(answer):
+                if agent:
+                    self.last_answer=answer['answer']
+                    self.history=answer['history']
+                    self.pending_prompt=''
+                    self.save_conversation()
+                    return
                 self.last_answer = answer
                 self.history = history + [{"role": "assistant", "content": answer}]
+                self.pending_prompt=''
+                self.save_conversation()
                 self.apply.setEnabled(bool(snapshot and re.search(r"```[^\n]*\n[\s\S]+?```", answer)))
-            job = self.start_job("AI coding assistant", lambda runner, delta: stream_chat(settings, key, history, runner, delta), done)
+            def request(runner, delta):
+                from .chatgpt_auth import access_token
+                token = access_token(settings["auth_account"]) if chatgpt else key
+                if agent:
+                    from .agent import stream_agent
+                    return stream_agent(settings,token,history,runner,delta,self.invoke_agent_tool,self.agent_history.emit)
+                return stream_chat(settings, token, history, runner, delta)
+            job = self.start_job("AI coding assistant", request, done)
             job.delta.connect(self.chat_delta)
             job.finished.connect(self.ai_finished)
             self.ai_job = job
@@ -882,9 +1236,22 @@ class Studio(QMainWindow):
         self.chat.setTextCursor(cursor)
         self.chat.ensureCursorVisible()
 
+    def undo_agent_edit(self):
+        if self.ai_job:
+            self.error('Finish or stop the assistant before undoing an edit.')
+            return
+        try:
+            result=self.agent_action('undo_last_edit',{})
+            self.output.appendPlainText('Assistant edit undone: '+result['path'])
+        except Exception as error:self.error(str(error))
+
     def ai_finished(self):
         self.ai_job = None
         self.send.setEnabled(True)
+        if self.pending_prompt:
+            self.prompt.setPlainText(self.pending_prompt)
+            self.pending_prompt=''
+        self.save_conversation()
 
     def review_edit(self):
         if not self.source_snapshot:
@@ -926,6 +1293,7 @@ class Studio(QMainWindow):
             event.ignore()
             return
         if self.save_before_switch():
+            self.save_conversation()
             event.accept()
         else:
             event.ignore()
@@ -942,9 +1310,22 @@ def main():
     app.setApplicationName("VegaBridge Studio")
     app.setOrganizationName("VegaBridge")
     app.setStyle("Fusion")
-    app.setStyleSheet(STYLE)
+    apply_theme(app, load_settings()["theme"])
     app.setWindowIcon(QIcon(str(Path(__file__).parent / "resources/vegabridge.ico")))
+    guard = None
+    if not args.smoke_test:
+        from .instance import SingleInstance
+        guard = SingleInstance()
+        if not guard.acquire():
+            return 0
     window = Studio(args.project)
+    if guard:
+        def activate():
+            window.showNormal()
+            window.raise_()
+            window.activateWindow()
+        guard.activated.connect(activate)
+        app.aboutToQuit.connect(guard.close)
     window.show()
     if args.smoke_test:
         QTimer.singleShot(500, app.quit)

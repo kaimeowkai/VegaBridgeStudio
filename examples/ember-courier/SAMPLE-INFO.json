@@ -1,0 +1,10 @@
+{
+  "id": "ember-courier",
+  "title": "Ember Courier",
+  "category": "Game",
+  "description": "Deliver sparks to four corner beacons while managing heat and cooling tiles.",
+  "component": "EmberCourier",
+  "language": "JavaScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

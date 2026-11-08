@@ -7,6 +7,8 @@ import hashlib
 import io
 import json
 import tarfile
+import tempfile
+import tomllib
 from pathlib import Path, PurePosixPath
 import flatbuffers
 import zstandard
@@ -16,7 +18,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import pkcs7
 from cryptography.x509.oid import NameOID
 from .storage import atomic_write, dpapi, user_dir
-from .project import metadata
+from .project import metadata, tool_path
 
 
 def asset_index(names):
@@ -129,7 +131,7 @@ def pack(root, emit=print, identity_base=None):
     return str(destination)
 
 
-def inspect_package(path):
+def package_files(path):
     files, total = {}, 0
     with open(path, "rb") as raw, zstandard.ZstdDecompressor().stream_reader(raw) as stream, tarfile.open(fileobj=stream, mode="r|") as archive:
         for entry in archive:
@@ -141,6 +143,11 @@ def inspect_package(path):
             if total > 128 * 1024 * 1024 or len(files) >= 10000:
                 raise ValueError("Package exceeds preview inspector limit (128 MiB / 10000 files)")
             files[name] = archive.extractfile(entry).read()
+    return files, total
+
+
+def inspect_package(path):
+    files, total = package_files(path)
     digest = json.loads(files["meta-info/signature/digest.json"])
     entries = digest["data"]["entries"]
     if digest["data"]["algorithm"] != "sha384":
@@ -155,3 +162,44 @@ def inspect_package(path):
     if not certs:
         raise ValueError("Package has no CMS signing certificate")
     return {"sha256": hashlib.sha256(Path(path).read_bytes()).hexdigest(), "files": sorted(files), "payloadBytes": total, "digestVerified": True, "cmsCertificateSha256": certs[0].fingerprint(hashes.SHA256()).hex(), "cmsCryptographicVerification": "Not performed by inspector; device installer verifies signature", "deviceInstallVerified": False}
+
+
+def verify_package(path, settings, runner):
+    """Verify CMS math and inventory; never imply Amazon signer trust/approval."""
+    result = inspect_package(path)
+    files, _ = package_files(path)
+    openssl = tool_path(settings.get('openssl', ''), 'openssl.exe')
+    with tempfile.TemporaryDirectory(prefix='vegabridge-cms-') as folder:
+        folder = Path(folder)
+        for name in ['digest.json', 'digest']:
+            payload = folder / name
+            signature = folder / (name + '.sig')
+            payload.write_bytes(files['meta-info/signature/' + name])
+            signature.write_bytes(files['meta-info/signature/' + name + '.sig'])
+            runner.run([openssl, 'cms', '-verify', '-binary', '-inform', 'DER', '-noverify',
+                        '-in', signature, '-content', payload, '-out', 'NUL'], timeout=20)
+    manifest = tomllib.loads(files['manifest.toml'].decode('utf-8'))
+    pkg = manifest['package']
+    if not all(pkg.get(key) for key in ['id', 'title', 'version', 'build-number', 'icon']):
+        raise ValueError('Manifest is missing required package metadata')
+    interactive = manifest.get('components', {}).get('interactive', [])
+    if not any('com.amazon.category.main' in item.get('categories', []) for item in interactive):
+        raise ValueError('Manifest has no main-category interactive component')
+    icon = pkg['icon']
+    if icon.startswith('@') and 'assets/' + icon[1:] not in files:
+        raise ValueError('Manifest icon is absent from the package')
+    from .workspace_tools import elf_architecture
+    native = []
+    for name, data in files.items():
+        if name.startswith(('lib/', 'bin/', 'shared/lib/')):
+            with tempfile.NamedTemporaryFile(prefix='vegabridge-elf-', delete=False) as f:
+                f.write(data)
+                temp = Path(f.name)
+            try:
+                native.append({'file': name, 'architecture': elf_architecture(temp)})
+            finally:
+                temp.unlink(missing_ok=True)
+    result.update(cmsCryptographicVerification='verified for both detached digest signatures', cmsSignatureVerified=True,
+                  signerTrust='Not established by this check; Amazon and device policy decide trusted signing identities',
+                  manifestChecked=True, nativeArchitectures=native, appstoreApproved=False)
+    return result

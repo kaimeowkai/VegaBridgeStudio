@@ -5,7 +5,11 @@ from vegabridge.app import Studio, SettingsDialog
 from vegabridge.project import create_project
 
 
-def test_native_workbench_opens_source_saves_and_displays_device_types(tmp_path):
+def test_native_workbench_opens_source_saves_and_displays_device_types(tmp_path,monkeypatch):
+    from vegabridge import app as workbench
+    from vegabridge.conversations import ConversationStore
+    monkeypatch.setattr(workbench,'ConversationStore',lambda:ConversationStore(tmp_path/'chats'))
+    monkeypatch.setattr(workbench,'save_settings',lambda _:None)
     app = QApplication.instance() or QApplication([])
     root = create_project(tmp_path / "app", "GUI Test", "com.example.guitest")
     window = Studio(root)

@@ -1,0 +1,1 @@
+global.KEPLER_MODULE_MAP = {"@amazon-devices/react-native-kepler": {"4.0.0":"/com.amazon.kepler.keplerscript_4@IKeplerScript_0","4.0.1":"/com.amazon.kepler.keplerscript_4@IKeplerScript_0","4.0.2":"/com.amazon.kepler.keplerscript_4@IKeplerScript_0"}};

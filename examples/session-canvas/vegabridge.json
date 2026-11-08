@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "template": "kepler4-js",
+  "target": "armv7",
+  "galleryTemplate": "session-canvas",
+  "language": "JavaScript"
+}

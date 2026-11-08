@@ -1,0 +1,10 @@
+{
+  "id": "decision-dock",
+  "title": "Decision Dock",
+  "category": "Home",
+  "description": "Create options, collect local votes and see a tie-aware result.",
+  "component": "DecisionDock",
+  "language": "JavaScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

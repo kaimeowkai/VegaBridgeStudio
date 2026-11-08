@@ -29,7 +29,7 @@ def owned_window(pid, title):
         if actual.value == pid and user.IsWindowVisible(hwnd):
             text = ctypes.create_unicode_buffer(1024)
             user.GetWindowTextW(hwnd, text, len(text))
-            if text.value == title:
+            if text.value in {title, title + ' - Press Ctrl+Alt+G to release grab'}:
                 found.append(hwnd)
         return True
     user.EnumWindows(visit, 0)

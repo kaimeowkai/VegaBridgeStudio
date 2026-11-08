@@ -1,22 +1,27 @@
-# Windows SDK port notes
+# Windows SDK host tools
 
-This project replaces selected Vega host tools with native Windows implementations. It is not a binary conversion of the complete Amazon SDK, and it does not redistribute decompiled vendor source.
+VegaBridge implements selected host workflows directly on Windows. It does not redistribute a decompiled Amazon SDK or claim complete SDK API/debugger parity. SDK headers, target libraries and guest images remain external owner-supplied inputs.
 
-| Component | Windows implementation | Verification / limit |
+| Workflow | Implementation and actual check | Limit |
 | --- | --- | --- |
-| Project creation/editor | Native PySide6 desktop UI | Opens, edits and saves the bundled JS project |
-| JS bundling | Windows Node, Metro and public npm Kepler packages | Portable module IDs patched within the project's own node_modules |
-| Development packager | Python, FlatBuffers, SHA-384, detached CMS, zstd USTAR | Packages accepted by physical Vega and the VM |
-| Device transport | Windows platform-tools, dedicated bridge port | Physical Wi-Fi and loopback VM; USB discovery implemented, physical USB test not claimed |
-| Shell compatibility | Legacy protocol with an explicit per-command exit marker | Handles the VM's different default shell service naming; does not confuse a successful connection with command success |
-| Virtual device launcher | Native Windows QEMU, virtio GPU, WHPX, private read-only NBD image mapping | Real Vega GUI and sample app launch observed |
-| VM persistence | QCOW2 overlay; SDK images remain read-only | Per-VM source inventory and stable GPT identifiers |
-| Coding assistant | HTTPS Responses / compatible Chat Completions adapter | Mock stream/error tests; real provider use requires the owner's own key |
-| Custom target C/C++ compilation | Not ported | Requires a validated Windows cross-toolchain/SDK integration |
-| Native source debugging / Hermes / strict ABI checks | Not ported | Not advertised as available |
+| Project/editor | Native Qt, JavaScript/TypeScript/TSX templates, source search, ten themes | Metro transpiles TypeScript; full language-server diagnostics are not provided |
+| Coding assistant | App-owned official ChatGPT OAuth; live Responses tool calls created/edited/built/deployed a separate synthetic app | No private Codex tokens, arbitrary shell or public chat transcripts |
+| Conversations | Windows-encrypted local discussion/drafts, saved chat picker, planning retained through project creation and restart | Provider receives the discussion/source used for a sent request |
+| JS app build | Windows Node, Metro and pinned public Kepler packages | Native modules need additional integration |
+| VPKG | Windows Python, FlatBuffers, SHA-384, detached CMS, zstd USTAR | Development signature is not Amazon approval |
+| Package validation | Exact payload inventory/hashes, required manifest fields, ELF architecture, both CMS signatures checked with OpenSSL | Signer-chain trust is not established by mathematical verification |
+| C/C++ | Windows LLVM/LLD against matching ARMv7, AArch64 and x86_64 sysroots; executable and shared-library output | Basic C/C++ programs executed on physical ARMv7 and the x86_64 VM; AArch64 compilation verified without AArch64 hardware |
+| x64 guest loader | Explicit Vega `/lib/ld-linux-x86-64.so.2` interpreter | Avoids generic Linux `/lib64` runtime failure |
+| TurboModule generator | Official JavaScript generator ran on Windows and emitted C++ spec/header/implementation files | Implement and link SDK-specific modules before using the generated scaffolding |
+| Hermes bytecode | Windows compiler emitted HBC 98; its signed test app rendered on the actual x64 VM and physical Fire Stick | Compiler/runtime versions must match; this does not qualify arbitrary Hermes releases |
+| Device bridge | Windows platform-tools, dedicated server port, explicit shell exit marker | Wi-Fi and loopback tested; physical USB compatibility depends on hardware/drivers |
+| Device input/capture | Remote keys, private text input, bounded screenshots, lifecycle-based launch check | A connected bridge or accepted launch is not proof of a visible app |
+| Developer wake session | Periodic WAKEUP key, bounded and cancelable; does not alter OS settings | No production app wake-lock API; does not promise TV power control |
+| Real Vega emulator | Windows QEMU/virgl/WHPX, read-only NBD image mapping and private QCOW2 overlay | SDK/VVD 2.0.13986 and QEMU 11.1 qualified path; TCG not performance-qualified |
+| VM ownership | Singleton lock plus monitor identity; GUI/CLI managed-session attach, stop and capture | Only the owned VM is controlled/captured |
+| Sample gallery | All 20 apps built, installed and visibly exercised in the actual VM; five games have progression checks | Separate physical app release checks are still necessary |
+| Source debugging | Not implemented in this preview | No source-level debugger parity is claimed |
 
-The local interoperability investigation inspected the SDK's ELF host tools and symbols, recovered launcher behavior, and examined the package and guest disk formats. The included source implements the Windows workflows independently; proprietary SDK inspection files, binaries and guest images are excluded from GitHub/source packages.
+The interoperability investigation inspected host binary formats/symbols, package structure and guest disk layout. The public source is the independent Windows implementation. Proprietary binaries, sysroots, guest images, inspection dumps, credentials and personal logs are excluded.
 
-An initial trial using an installed stock Android Windows emulator misdetected the guest architecture and later failed in graphics initialization. The working path uses upstream Windows QEMU directly, a correctly named GPT partition layout, and virtio graphics. A minimal kernel probe intentionally ran `uname` as PID 1 and ended with the expected init-exit panic; that probe is not the full-boot evidence. Subsequent full guest boots reached the actual Vega Virtual Device ready screen and launched the development package.
-
-Only the JS sample path is qualified so far. The VM's hardware services differ from real Fire TV and may emit service warnings. Do not infer DRM, purchasing, media, sensor or production compatibility from a successful basic app launch.
+The actual VM boots the Vega guest OS. A successful JS sample or native console probe does not establish complete media, IAP, DRM, sensor, peripheral, timing or Appstore certification parity. Keep your existing production signing identity when updating an existing app.

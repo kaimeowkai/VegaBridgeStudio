@@ -1,0 +1,10 @@
+{
+  "id": "packing-lantern",
+  "title": "Packing Lantern",
+  "category": "Travel",
+  "description": "Create a reusable packing checklist and track packed items.",
+  "component": "PackingLantern",
+  "language": "JavaScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

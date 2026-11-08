@@ -1,0 +1,10 @@
+{
+  "id": "echo-atlas",
+  "title": "Echo Atlas",
+  "category": "Game",
+  "description": "Recall a growing glyph route while its map rotates between rounds.",
+  "component": "EchoAtlas",
+  "language": "JavaScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

@@ -1,0 +1,10 @@
+{
+  "id": "signal-bench",
+  "title": "Signal Bench",
+  "category": "Developer",
+  "description": "Inspect screen metrics and monitor real TV remote input events.",
+  "component": "SignalBench",
+  "language": "JavaScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

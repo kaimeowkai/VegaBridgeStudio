@@ -1,0 +1,10 @@
+{
+  "id": "split-ledger",
+  "title": "Split Ledger",
+  "category": "Utility",
+  "description": "Calculate a shared bill with adjustable tip and group size.",
+  "component": "SplitLedger",
+  "language": "JavaScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

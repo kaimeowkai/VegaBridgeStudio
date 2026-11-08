@@ -1,0 +1,10 @@
+{
+  "id": "measure-mosaic",
+  "title": "Measure Mosaic",
+  "category": "Utility",
+  "description": "Convert distances and temperatures with a remote-controlled value pad.",
+  "component": "MeasureMosaic",
+  "language": "JavaScript",
+  "source": "Original VegaBridge sample; common genre mechanics may have similarities to other software",
+  "requiresNetwork": false
+}

@@ -7,6 +7,9 @@ __pycache__/
 /dist/
 /dist-review/
 qa-*.log
+/qa-*
+/dist-*/
+/release-workspace/
 /review/
 /qa-workspace/
 .env*
