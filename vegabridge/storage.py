@@ -84,7 +84,8 @@ DEFAULTS = {"adb": "", "node": "", "bridge_port": 5048, "endpoint": "https://api
             "hermes": "", "clang": "", "sysroot": "", "sdk_root": "", "openssl": "", "codegen":"",
             "debug_adapter":"", "debug_server":"", "api_root":"",
             "java":"", "git_sh":"", "apmfc":"",
-            "chat_active":"planning", "agent_mode":"Workspace agent", "projects_folder":str(Path.home()/'VegaProjects')}
+            "chat_active":"planning", "agent_mode":"Workspace agent", "projects_folder":str(Path.home()/'VegaProjects'),
+            "check_updates":True,"auto_update":False,"update_channel":"Preview"}
 
 
 def load_settings():

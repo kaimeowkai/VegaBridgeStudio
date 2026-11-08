@@ -2,7 +2,7 @@
 
 A native Windows workbench for creating and testing Amazon Vega apps: editor, project templates, real Vega VM host, USB/Wi-Fi device tools and an integrated coding assistant.
 
-**0.4.0 is an independent community developer preview.** It runs its host tools directly on Windows. It requires your own Amazon SDK target files and virtual-device images for SDK and emulator features. It is not affiliated with Amazon or OpenAI and does not redistribute Amazon's SDK.
+**0.5.0 is an independent community developer preview.** It runs its host tools directly on Windows. It requires your own Amazon SDK target files and virtual-device images for SDK and emulator features. It is not affiliated with Amazon or OpenAI and does not redistribute Amazon's SDK.
 
 ![Actual Studio JavaScript debugging with the development assistant visible](docs/screenshots/studio-overview.png)
 
@@ -13,6 +13,10 @@ Download the Windows x64 ZIP from [GitHub releases](https://github.com/kaimeowka
 Choose **Settings** to configure your complete Windows Node/npm installation and Android platform-tools `adb.exe`. Studio uses a separate bridge port, 5048 by default. Native cross compilation additionally needs Windows LLVM/LLD and the matching owner-supplied SDK sysroots. Optional tools are OpenSSL, the official TurboModule generator's `cli.js`, and a compatible Windows Hermes compiler. These third-party tools are external prerequisites.
 
 Create a blank JavaScript/TypeScript project or choose one of the 20 original sample templates. **Build package** installs the project's pinned dependencies, bundles source and signs a development VPKG. **Install + run** targets the online device selected in the toolbar. Build trusted projects only: npm scripts and project build configuration execute with your local privileges.
+
+## Updates
+
+Use **Help → Check for updates** for release checks, notes, verified downloads and restart/install. **Settings → Updates** enables optional automatic download and installation on the next clean exit, with Preview/Stable channels. The updater checks SHA-256 digests and an installation manifest, keeps the previous installation for rollback, and preserves projects and per-user data. See [update behavior and limits](docs/UPDATING.md).
 
 ## Integrated development assistant
 
@@ -30,7 +34,11 @@ Device Lab provides install/run, remote keys, text input, screen capture, packag
 
 **Keep awake during testing** sends the developer WAKEUP key periodically for a bounded session. It does not change sleep settings or promise to keep a television powered on, and it is not a production app wake-lock API.
 
-For a real local emulator, configure a Windows QEMU distribution including GTK/OpenGL/virgl and `qemu-img.exe`, your matching Vega VVD `image_files` folder, and a separate writable VM folder. Start the native VM, wait for its ready screen, then connect it to Device Lab. Source SDK images remain read-only; guest writes persist in a private overlay. Studio permits one visible IDE instance and one managed VM. WHPX must already be enabled; Studio does not change Windows security or hypervisor settings. TCG is available but not performance-qualified.
+For a real local emulator, configure a Windows QEMU distribution including GTK/OpenGL/virgl and `qemu-img.exe`, your matching Vega VVD `image_files` folder, and a separate writable VM folder. Open **Emulator** with **Ctrl+Shift+E**, then **Start / attach**. Studio waits for its device bridge and package service. Its **live display** mirrors the managed engine's GPU window into the IDE; a refreshed-image fallback is also available. **Pop out emulator** moves the same panel into a separate window and can dock it back. Remote buttons, pause/resume and status controls stay with the panel. Source SDK images remain read-only; guest writes persist in a private overlay. Studio permits one visible IDE instance and one managed VM. WHPX must already be enabled; Studio does not change Windows security or hypervisor settings. TCG is available but not performance-qualified. See [workbench controls and limits](docs/WORKBENCH.md).
+
+Device Lab also includes named connection bookmarks, target inspection, offline/authorization guidance and reconnect for the selected Wi-Fi target. **Ctrl+Shift+P** opens the command palette; **Ctrl+P** finds project files; **Ctrl+G** goes to a line; **Ctrl+H** replaces current-file text with one-step Undo. Selected lines support Tab/Shift+Tab and Ctrl+/ comments.
+
+![VegaBridge emulator pop-out controlling a real Vega development app with synthetic data](docs/screenshots/emulator-popout.png)
 
 The optional remote VVD controls remain available for an already-configured Ubuntu/macOS SDK host. They are not required for the native Windows path.
 
@@ -50,6 +58,10 @@ This remains a partial Windows host-tool implementation, not a complete binary c
 
 Use **Native debugger** to launch a C/C++ developer executable or attach to the current project's installed app. The **JavaScript debugger** tab builds a development app and connects directly to its Hermes runtime, with original JS/TS/JSX source breakpoints, stepping, stack, locals and console evaluation. Release packaging keeps debugging disabled. **SDK browser** searches external API contracts and headers; **Tools → Generate platform API C++ bindings** runs the SDK APMF compiler natively on Windows. See [native setup and tested limits](docs/NATIVE-DEBUGGING.md) and [JavaScript debugging](docs/JAVASCRIPT-DEBUGGING.md).
 
+## Android compatibility planning
+
+**Tools → Import Android app for compatibility planning** creates separate preservation reports and shared adapter plans, and includes a runtime prerequisite research panel. Conversion and Android runtime execution are not implemented. These planning controls were absent from the 0.4.0 downloads. See [the workbench guide](docs/ANDROID-TO-VEGA.md) and [runtime research](docs/ANDROID-RUNTIME-RESEARCH.md).
+
 ## Ten included themes
 
 Harbor Dark, Matrix, Daylight, Midnight Blue, Solar Ember, Orchid Night, Forest Canopy, Arctic Light, Rose Quartz, High Contrast. Choose Settings → Appearance for a live preview, then Save. The editor, assistant, output, menus and controls follow the selected palette. See [theme details](docs/THEMES.md).
@@ -58,6 +70,6 @@ Harbor Dark, Matrix, Daylight, Midnight Blue, Solar Ember, Orchid Night, Forest 
 
 The gallery includes 15 useful app starters and five original games with distinct visual directions and local interaction. See [the sample gallery](docs/SAMPLE-GALLERY.md), [version history](CHANGELOG.md), [SDK port notes](docs/WINDOWS-SDK-PORT.md) and [security notes](SECURITY.md). Screenshots are actual emulator captures of synthetic sample projects.
 
-The [0.1.0](https://github.com/kaimeowkai/VegaBridgeStudio/releases/tag/v0.1.0), [0.2.0](https://github.com/kaimeowkai/VegaBridgeStudio/releases/tag/v0.2.0) and [0.3.0](https://github.com/kaimeowkai/VegaBridgeStudio/releases/tag/v0.3.0) downloads are preserved with separate release notes. [0.4.0](https://github.com/kaimeowkai/VegaBridgeStudio/releases/tag/v0.4.0) adds installed-app attachment and JavaScript debugging while retaining ChatGPT sign-in, assistant tools, ten themes and the redesigned gallery. Restore a hidden assistant with **Show assistant** or **Ctrl+Shift+A**.
+The [0.1.0](https://github.com/kaimeowkai/VegaBridgeStudio/releases/tag/v0.1.0), [0.2.0](https://github.com/kaimeowkai/VegaBridgeStudio/releases/tag/v0.2.0), [0.3.0](https://github.com/kaimeowkai/VegaBridgeStudio/releases/tag/v0.3.0) and [0.4.0](https://github.com/kaimeowkai/VegaBridgeStudio/releases/tag/v0.4.0) downloads are preserved with separate release notes. 0.5.0 adds the integrated emulator/device workbench and IDE navigation while retaining installed-app attachment, JavaScript debugging, ChatGPT sign-in, assistant tools, ten themes and the redesigned gallery. Restore a hidden assistant with **Show assistant** or **Ctrl+Shift+A**.
 
-To build from source, use Python 3.12 on Windows, create `.venv`, install `.[dev]`, run `python -m pytest -q`, then `scripts/build-windows.ps1 -OutputDirectory dist-v0.4.0`. Third-party notices accompany the portable package. Original project code is MIT licensed.
+To build from source, use Python 3.12 on Windows, create `.venv`, install `.[dev]`, run `python -m pytest -q`, then `scripts/build-windows.ps1 -OutputDirectory dist-v0.5.0`. Third-party notices accompany the portable package. Original project code is MIT licensed.

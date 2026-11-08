@@ -22,6 +22,8 @@ def main(argv=None):
     sub=parser.add_subparsers(dest='command',required=True)
     sub.add_parser('templates')
     sub.add_parser('doctor')
+    assess=sub.add_parser('assess-android',help='Read-only Android source/APK migration assessment')
+    assess.add_argument('input',type=Path);assess.add_argument('--plan',type=Path,help='Save a new Markdown plan outside the input project')
     sub.add_parser('devices')
     emulator=sub.add_parser('emulator')
     emulator.add_argument('action',choices=['start','status','stop'])
@@ -54,6 +56,10 @@ def main(argv=None):
         elif args.command=='build':
             from .project import build
             result={'package':build(args.folder,settings,runner,debug=args.debug)}
+        elif args.command=='assess-android':
+            from .android_migration import assess_android,write_plan
+            result=assess_android(args.input)
+            if args.plan:result['planFile']=write_plan(result,args.input,args.plan)
         elif args.command=='devices':
             from .devices import LocalBridge
             result=LocalBridge(settings,runner).devices()

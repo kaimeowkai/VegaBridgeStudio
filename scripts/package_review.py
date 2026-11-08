@@ -4,13 +4,14 @@ import importlib.metadata as md
 import json
 import shutil
 import sys
+import tomllib
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT / "dist"
 APP = DIST / "VegaBridgeStudio"
-VERSION = "0.4.0"
+VERSION = tomllib.loads((ROOT/'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
 
 
 def notices():
@@ -64,13 +65,16 @@ def make_zip(path, files, base):
 
 def main():
     notices()
+    manifest={'version':VERSION,'files':{file.relative_to(APP).as_posix():hashlib.sha256(file.read_bytes()).hexdigest()
+        for file in sorted(APP.rglob('*')) if file.is_file() and file.name!='Install-Manifest.json'}}
+    (APP/'Install-Manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
     portable = DIST / f"VegaBridgeStudio-{VERSION}-windows-x64.zip"
     source = DIST / f"VegaBridgeStudio-{VERSION}-source.zip"
     make_zip(portable, sorted(file for file in APP.rglob("*") if file.is_file()), DIST)
     sources = source_files()
     make_zip(source, sources, ROOT)
     receipts = []
-    for file in [portable, source, APP / "VegaBridgeStudio.exe", APP / "VegaBridgeCLI.exe"]:
+    for file in [portable, source, APP / "VegaBridgeStudio.exe", APP / "VegaBridgeCLI.exe", APP / 'VegaBridgeUpdater.exe']:
         receipts.append({"file": file.relative_to(DIST).as_posix(), "bytes": file.stat().st_size, "sha256": hashlib.sha256(file.read_bytes()).hexdigest()})
     (DIST / "SHA256SUMS.txt").write_text("".join(item["sha256"] + "  " + item["file"] + "\n" for item in receipts), encoding="utf-8")
     (DIST / "Build-Receipt.json").write_text(json.dumps({"version": VERSION, "platform": "Windows x64", "publiclyPublished": False, "authenticodeSigned": False, "sourceFiles": len(sources), "artifacts": receipts}, indent=2), encoding="utf-8")

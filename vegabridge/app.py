@@ -191,6 +191,12 @@ class SettingsDialog(QDialog):
         field(emulator, "Vega CLI path on host", "vega_cli")
         field(emulator, "VVD serial", "emulator_serial")
         emulator.addRow(label("Uses existing SSH trust and key authentication with strict host verification. Set up the official SDK and SSH access yourself on that host. No SDK image or virtual machine is included."))
+        updates=page('Updates','Public VegaBridge GitHub releases only. No account, chat content or API key is sent when checking or downloading updates.')
+        for name,title in [('check_updates','Check for updates automatically (at most every 8 hours)'),('auto_update','Download verified updates automatically and install on the next clean exit')]:
+            check=QCheckBox(title);check.setChecked(bool(settings[name]));self.fields[name]=check;updates.addRow(check)
+        channel=QComboBox();channel.addItems(['Preview','Stable']);channel.setCurrentText(settings['update_channel']);self.fields['update_channel']=channel
+        updates.addRow('Release channel',channel)
+        updates.addRow(label('Preview includes community preview releases. Updates require the full portable Windows package, a matching SHA-256 digest, and a clean application exit. The previous installation is retained for rollback. Extra files in the installation folder are refused; keep projects outside it.'))
         controls = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         controls.accepted.connect(self.commit)
         controls.rejected.connect(self.reject)
@@ -199,7 +205,7 @@ class SettingsDialog(QDialog):
     def commit(self):
         try:
             for name, entry in self.fields.items():
-                value = entry.currentText() if isinstance(entry, QComboBox) else entry.text().strip()
+                value = entry.isChecked() if isinstance(entry,QCheckBox) else entry.currentText() if isinstance(entry, QComboBox) else entry.text().strip()
                 if name in {"bridge_port", "ssh_port"}:
                     value = int(value)
                     if not 1 <= value <= 65535:
@@ -247,6 +253,10 @@ class Studio(AgentHost, QMainWindow):
         self.vm_job = None
         self.native_vm = None
         self.awake_job = None
+        self.vm_connect_job = None
+        self._last_target_serial = ''
+        from .device_profiles import DeviceProfiles
+        self.device_profiles = DeviceProfiles()
         self.source_snapshot = None
         self.last_package = None
         self._create_toolbar()
@@ -261,6 +271,8 @@ class Studio(AgentHost, QMainWindow):
         self.load_conversation(self.chat_key,save_current=False)
         self._create_output_dock()
         self._create_menus()
+        from .update_ui import UpdateController
+        self.updater=UpdateController(self)
         self.statusBar().showMessage("Ready  •  Community developer preview  •  Windows native")
         self.cursor_status = QLabel("UTF-8")
         self.statusBar().addPermanentWidget(self.cursor_status)
@@ -335,7 +347,7 @@ class Studio(AgentHost, QMainWindow):
         welcome = QWidget()
         welcome_layout = QVBoxLayout(welcome)
         welcome_layout.setContentsMargins(42, 40, 42, 35)
-        welcome_layout.addWidget(label("VEGABRIDGE STUDIO  /  0.2 PREVIEW", "eyebrow"))
+        welcome_layout.addWidget(label("VEGABRIDGE STUDIO  /  " + __version__ + " PREVIEW", "eyebrow"))
         welcome_layout.addWidget(label("Build for Vega.\nWork from Windows.", "hero"))
         welcome_layout.addWidget(label("A focused workspace for your project, connected device, and coding assistant. Choose a JavaScript/TypeScript starter or an original sample template."))
         welcome_layout.addSpacing(20)
@@ -365,6 +377,20 @@ class Studio(AgentHost, QMainWindow):
         connect_row.addWidget(button("Connect Wi-Fi", self.connect_device))
         connect_row.addWidget(button("Find USB devices", self.refresh_devices))
         layout.addLayout(connect_row)
+        profile_row = QHBoxLayout()
+        self.saved_targets = QComboBox()
+        self.saved_targets.setMinimumWidth(180)
+        self.saved_targets.setToolTip('Private connection bookmarks stored outside all projects. No automatic network scan.')
+        profile_row.addWidget(self.saved_targets,1)
+        profile_row.addWidget(button('Connect saved',self.connect_saved_device))
+        profile_row.addWidget(button('Save target…',self.save_device_profile))
+        profile_row.addWidget(button('Forget saved',self.forget_device_profile))
+        profile_row.addWidget(button('Inspect target',self.inspect_device))
+        profile_row.addWidget(button('Reconnect Wi-Fi',self.reconnect_device))
+        layout.addLayout(profile_row)
+        self.device_health = label('Refresh devices to discover USB and Wi-Fi targets. Offline and unauthorized targets cannot receive commands.')
+        layout.addWidget(self.device_health)
+        self.load_device_profiles()
         self.screen = QLabel("DEVICE SCREEN\n\nSelect a target, then capture its display.")
         self.screen.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.screen.setMinimumHeight(220)
@@ -382,37 +408,16 @@ class Studio(AgentHost, QMainWindow):
         session.addWidget(self.keep_awake)
         session.addWidget(button("Type text…", self.type_device_text))
         layout.addLayout(session)
-        self.target.currentIndexChanged.connect(lambda: self.keep_awake.setChecked(False))
+        self.target.currentIndexChanged.connect(self.target_changed)
         actions = QHBoxLayout()
         for text, fn in [("Installed apps", lambda: self.device_command("Installed apps", "vpm list packages")), ("Running apps", lambda: self.device_command("Running apps", "vlcm list")), ("Install VPKG…", self.install_file), ("Stop project app", self.stop_app), ("Uninstall…", self.uninstall_app), ("Push file…", self.push_file), ("Pull file…", self.pull_file)]:
             actions.addWidget(button(text, fn))
         layout.addLayout(actions)
         self.center.addTab(page, "Device Lab")
 
-        emulator = QWidget()
-        em = QVBoxLayout(emulator)
-        em.setContentsMargins(28, 28, 28, 28)
-        em.addWidget(label("NATIVE WINDOWS EMULATOR", "eyebrow"))
-        em.addWidget(label("Vega OS, on your PC.", "brand"))
-        em.addWidget(label("Windows QEMU + Vega images • community preview", "pill"))
-        em.addWidget(label("Configure your Windows QEMU executable and VVD image_files folder in Settings. Start the VM, wait for its ready screen, then connect it as a Device Lab target. Its writable app data persists in a separate VM folder."))
-        native_row = QHBoxLayout()
-        native_row.addWidget(button("Start native Vega VM", self.start_native_vm, True))
-        native_row.addWidget(button("Stop native VM", self.stop_native_vm))
-        native_row.addWidget(button("Connect VM to Device Lab", self.connect_native_vm))
-        em.addLayout(native_row)
-        em.addWidget(label("JavaScript app install, launch and graphics are being verified on this port. This does not establish hardware, DRM, purchasing, sensors, audio or Appstore certification parity. Always test release apps on physical Fire TV hardware."))
-        em.addSpacing(25)
-        em.addWidget(label("Optional supported-host connection", "eyebrow"))
-        em.addWidget(label("If you already run Amazon's SDK on an Ubuntu or macOS host, configure SSH in Settings. These controls invoke its real Vega Virtual Device and then expose it as a Device Lab target. This is not a native Windows emulator."))
-        row = QHBoxLayout()
-        for action in ["start", "status", "stop"]:
-            row.addWidget(button(action.title() + " official VVD", lambda checked=False, action=action: self.emulator_action(action)))
-        row.addWidget(button("Discover VVD targets", self.refresh_emulator))
-        em.addLayout(row)
-        em.addWidget(button("Amazon emulator documentation", lambda: QDesktopServices.openUrl(QUrl("https://developer.amazon.com/docs/vega/2.0/run-apps"))))
-        em.addStretch()
-        self.center.addTab(emulator, "Emulator")
+        from .emulator_panel import EmulatorPane
+        self.emulator_pane = EmulatorPane(self)
+        self.center.addTab(self.emulator_pane, "Emulator")
         from .debug_panel import NativeDebugPane
         self.debugger=NativeDebugPane(self)
         self.center.addTab(self.debugger,'Native debugger')
@@ -546,9 +551,19 @@ class Studio(AgentHost, QMainWindow):
         search.triggered.connect(self.search_workspace)
         edit.addAction(search)
         view = self.menuBar().addMenu("View")
+        self.ide_action(view,'Command palette…','Ctrl+Shift+P',self.command_palette)
+        self.ide_action(file_menu,'Quick open file…','Ctrl+P',self.quick_open)
+        self.ide_action(edit,'Go to line…','Ctrl+G',self.go_to_line)
+        self.ide_action(edit,'Replace in current file…','Ctrl+H',self.replace_in_file)
+        self.ide_action(edit,'Toggle line comment','Ctrl+/',self.toggle_comment)
+        self.ide_action(view,'Show emulator','Ctrl+Shift+E',lambda:self.center.setCurrentWidget(self.emulator_pane))
+        view.addAction('Pop out / dock emulator',self.emulator_pane.toggle_popout)
+        self.build_action.setShortcut('Ctrl+Shift+B')
+        self.run_action.setShortcut('Ctrl+F5')
         for dock in self.findChildren(QDockWidget):
             view.addAction(dock.toggleViewAction())
         tools = self.menuBar().addMenu("Tools")
+        tools.addAction('Import Android app for compatibility planning…',self.import_android)
         tools.addAction("Inspect VPKG…", self.inspect_file)
         tools.addAction("Validate VPKG and CMS signature…", self.validate_vpkg)
         tools.addAction("SDK setup check…", self.check_environment)
@@ -558,12 +573,88 @@ class Studio(AgentHost, QMainWindow):
         tools.addAction("Compile JavaScript to Hermes bytecode…", self.generate_bytecode)
         tools.addAction("ChatGPT accounts…", self.show_chatgpt_accounts)
         tools.addAction("Open local data folder", lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(user_dir()))))
+        devices_menu = self.menuBar().addMenu('Devices')
+        for title, fn in [('Start / attach managed Vega VM',self.start_native_vm),('Refresh USB and Wi-Fi targets',self.refresh_devices),('Inspect selected target',self.inspect_device),
+                          ('Reconnect selected Wi-Fi target',self.reconnect_device),('Connect managed VM when ready',self.connect_native_vm)]:
+            devices_menu.addAction(title,fn)
+        remote_menu = devices_menu.addMenu('Remote SDK host (optional)')
+        for action in ['start','status','stop']:
+            remote_menu.addAction(action.title()+' official VVD',lambda checked=False,action=action:self.emulator_action(action))
+        remote_menu.addAction('Discover remote VVD targets',self.refresh_emulator)
         help_menu = self.menuBar().addMenu("Help")
+        help_menu.addAction('Check for updates…',lambda:self.updater.show())
         help_menu.addAction("About", lambda: QMessageBox.information(self, "VegaBridge Studio", "VegaBridge Studio " + __version__ + "\nIndependent Windows developer workbench.\nNot affiliated with Amazon or OpenAI.\n\nJavaScript/TypeScript app templates, Windows LLVM C/C++ cross-compilation, device tools, native Vega VM, themes and ChatGPT sign-in.\nPlatform API integration and Amazon certification still require the relevant SDK contracts and release testing."))
+
+    def ide_action(self, menu, title, shortcut, fn):
+        action = QAction(title,self)
+        action.setShortcut(shortcut);action.triggered.connect(fn);menu.addAction(action)
+        return action
+
+    def command_palette(self):
+        from .navigation import Picker
+        actions = []
+        seen = set()
+        for action in self.findChildren(QAction):
+            title = action.text().replace('&','')
+            if title and title not in seen and not action.isSeparator() and not action.menu() and action.isEnabled():
+                actions.append((title,action.shortcut().toString(),len(actions)))
+                seen.add(title)
+        # Keep Python QAction references separate from Qt's item serialization.
+        by_title = {action.text().replace('&',''):action for action in self.findChildren(QAction) if not action.menu()}
+        picker = Picker('Command palette — Ctrl+Shift+P',actions,self)
+        if picker.exec() and picker.chosen is not None:
+            title = actions[picker.chosen][0]
+            by_title[title].trigger()
+
+    def quick_open(self):
+        from .navigation import Picker,project_files
+        if not self.project:
+            self.error('Open a project before using Quick open.');return
+        paths = project_files(self.project)
+        picker = Picker('Quick open — Ctrl+P',[(name,'',name) for name in paths],self)
+        if picker.exec() and picker.chosen:
+            self.open_file(self.project/picker.chosen)
+            self.center.setCurrentIndex(0)
+
+    def go_to_line(self):
+        editor = self.current_editor()
+        if not editor:return
+        line,ok = QInputDialog.getInt(self,'Go to line','Line number:',editor.textCursor().blockNumber()+1,1,editor.blockCount())
+        if ok:editor.go_to_line(line)
+
+    def toggle_comment(self):
+        editor = self.current_editor()
+        if editor:
+            try:editor.toggle_comment()
+            except ValueError as error:self.error(str(error))
+
+    def replace_in_file(self):
+        editor = self.current_editor()
+        if not editor:return
+        dialog = QDialog(self);dialog.setWindowTitle('Replace in '+editor.path.name)
+        form = QFormLayout(dialog)
+        query,replacement = QLineEdit(self.find.text()),QLineEdit()
+        case,words = QCheckBox('Match case'),QCheckBox('Whole words')
+        form.addRow('Find',query);form.addRow('Replace with',replacement)
+        form.addRow(case);form.addRow(words)
+        notice = label('Changes stay in the editor until saved. Undo reverses the entire replacement.')
+        form.addRow(notice)
+        def replace():
+            try:
+                count = editor.replace_all(query.text(),replacement.text(),case.isChecked(),words.isChecked())
+                notice.setText(f'Replaced {count} occurrence(s). Use Undo in the editor to reverse.')
+            except ValueError as error:notice.setText(str(error))
+        form.addRow(button('Replace all in this file',replace))
+        form.addRow(button('Close',dialog.accept))
+        dialog.exec()
 
     def error(self, text):
         self.output.appendPlainText("ERROR: " + text)
         self.statusBar().showMessage(text, 12000)
+
+    def import_android(self):
+        from .android_import import AndroidImportDialog
+        dialog=AndroidImportDialog(self);dialog.exec()
 
     def generate_native_module(self):
         from .codegen import generate_module
@@ -934,6 +1025,7 @@ class Studio(AgentHost, QMainWindow):
     def set_devices(self, found, remote=False, prefer=""):
         selected = {"serial": prefer} if prefer else self.target.currentData()
         keep = [self.target.itemData(i) for i in range(self.target.count()) if self.target.itemData(i) and (self.target.itemData(i)["kind"] == "Remote VVD") != remote]
+        self.target.blockSignals(True)
         self.target.clear()
         self.target.addItem("Select target…", None)
         for item in keep + found:
@@ -943,11 +1035,80 @@ class Studio(AgentHost, QMainWindow):
             self.target.addItem(title, item if item["state"] == "device" else None)
             if selected and selected["serial"] == item["serial"] and item["state"] == "device":
                 self.target.setCurrentIndex(self.target.count()-1)
-        if self.target.currentIndex() == 0:
+        if self.target.currentIndex() == 0 and not selected:
             for i in range(1, self.target.count()):
                 if self.target.itemData(i):
                     self.target.setCurrentIndex(i)
                     break
+        self.target.blockSignals(False)
+        self.target_changed()
+        unavailable = [row for row in found if row['state']!='device']
+        if unavailable:
+            from .device_profiles import connection_guidance
+            self.device_health.setText(' • '.join(row['serial']+' ('+row['state']+'): '+connection_guidance(row['state'],row['kind']) for row in unavailable))
+
+    def target_changed(self):
+        target = self.target.currentData()
+        serial = target['serial'] if target else ''
+        if serial != self._last_target_serial:
+            self.keep_awake.setChecked(False)
+            self.screen.clear()
+            self.screen.setText('Target changed. Capture its display to inspect the selected device.')
+        self._last_target_serial = serial
+        if target:
+            self.device_health.setText(target['kind']+' • '+serial+' • authorized bridge connection')
+        else:
+            self.device_health.setText('No authorized target selected. Refresh devices or connect a saved Wi-Fi target.')
+
+    def load_device_profiles(self):
+        self.saved_targets.clear()
+        self.saved_targets.addItem('Saved device connections…',None)
+        for row in self.device_profiles.list():
+            self.saved_targets.addItem(row['name']+' • '+row['kind']+' • '+row['serial'],row)
+
+    def save_device_profile(self):
+        target = self.target.currentData()
+        if not target or target['kind'] not in {'Wireless','USB'}:
+            self.error('Select an online local USB or Wi-Fi target to save.');return
+        name,ok = QInputDialog.getText(self,'Save device connection','Name:',text='My '+target['kind']+' device')
+        if ok:
+            try:
+                self.device_profiles.save(name,target['serial'],target['kind']);self.load_device_profiles()
+            except ValueError as error:self.error(str(error))
+
+    def forget_device_profile(self):
+        row = self.saved_targets.currentData()
+        if row:
+            self.device_profiles.remove(row['serial']);self.load_device_profiles()
+
+    def connect_saved_device(self):
+        row = self.saved_targets.currentData()
+        if not row:return
+        if row['kind']=='Wireless':
+            self.address.setText(row['serial']);self.connect_device()
+        else:
+            settings = dict(self.settings)
+            self.start_job('Find saved USB device',lambda runner,delta:LocalBridge(settings,runner).devices(),lambda rows:self.set_devices(rows,prefer=row['serial']))
+
+    def inspect_device(self):
+        try:
+            snapshot = self.target_snapshot()
+            if snapshot[1]['kind']=='Remote VVD':
+                self.error('Target inspection is currently available for local USB and Wi-Fi devices.');return
+            def show(report):
+                self.console.appendPlainText(json.dumps(report,indent=2))
+                self.device_health.setText(report['serial']+' • '+report['state']+' • inspection complete; see Developer shell & logs')
+            self.start_job('Inspect selected device',lambda runner,delta:LocalBridge(snapshot[0],runner,snapshot[1]['serial']).diagnostics(),show,console=True)
+        except Exception as error:self.error(str(error))
+
+    def reconnect_device(self):
+        try:
+            snapshot = self.target_snapshot()
+            if snapshot[1]['kind']!='Wireless':
+                raise ValueError('Reconnect applies to the selected Wi-Fi target. USB connection modes are not changed.')
+            serial = snapshot[1]['serial']
+            self.start_job('Reconnect selected Wi-Fi target',lambda runner,delta:LocalBridge(snapshot[0],runner,serial).reconnect(),lambda rows:self.set_devices(rows,prefer=serial))
+        except Exception as error:self.error(str(error))
 
     def refresh_devices(self):
         settings = dict(self.settings)
@@ -994,7 +1155,8 @@ class Studio(AgentHost, QMainWindow):
                 bridge.install(path)
                 if launch:
                     bridge.launch(info["component"])
-                return "Install verified. " + ("Launch requested; use Device Lab to inspect the screen." if launch else "")
+                    bridge.wait_for_app(info['component'])
+                return "Install verified. " + ("App is VISIBLE in Vega lifecycle; capture its display to inspect rendering." if launch else "")
             self.start_job("Install " + path.name, work)
         except Exception as error:
             self.error(str(error))
@@ -1111,6 +1273,9 @@ class Studio(AgentHost, QMainWindow):
         try:
             self.native_vm=NativeVm.attach_managed(dict(self.settings))
             self.output.appendPlainText('Attached to the existing Studio-managed VM. A second VM was not started.')
+            self.emulator_pane.preview.setChecked(True)
+            self.emulator_pane.refresh()
+            self.connect_native_vm()
             return
         except (OSError,ValueError,RuntimeError):
             pass
@@ -1120,9 +1285,14 @@ class Studio(AgentHost, QMainWindow):
         def finished():
             self.vm_job = None
             self.native_vm = None
+            self.emulator_pane.detach_live()
         self.vm_job.finished.connect(finished)
+        self.emulator_pane.preview.setChecked(True)
+        self.connect_native_vm()
 
     def stop_native_vm(self):
+        self.emulator_pane.detach_live()
+        if self.vm_connect_job:self.vm_connect_job.cancelled.set()
         if self.vm_job:
             self.vm_job.cancelled.set()
             self.output.appendPlainText("Stopping the native VM and flushing its private overlay disk…")
@@ -1131,9 +1301,26 @@ class Studio(AgentHost, QMainWindow):
             self.start_job('Stop the owned native VM',lambda runner,delta:managed_vm_command('quit'))
 
     def connect_native_vm(self):
-        self.address.setText("127.0.0.1:" + str(self.settings["vm_port"]))
-        self.connect_device()
-        self.center.setCurrentIndex(1)
+        if self.vm_connect_job:
+            self.error('Already waiting for the managed VM connection. Cancel tasks stops that wait.');return
+        settings = dict(self.settings)
+        try:
+            vm = NativeVm.attach_managed(settings)
+            address = '127.0.0.1:'+str(vm.device_port)
+        except (OSError,ValueError,RuntimeError):
+            if not self.vm_job:
+                self.error('Start or attach the managed VM before connecting.');return
+            address = '127.0.0.1:'+str(settings['vm_port'])
+        self.address.setText(address)
+        def ready(rows):
+            self.set_devices(rows,prefer=address)
+            self.emulator_pane.failures=0
+            self.emulator_pane.live_view.setChecked(True)
+            if not self.emulator_pane.live_view.isChecked() and not self.emulator_pane.live_pending:
+                self.emulator_pane.preview.setChecked(True)
+                self.emulator_pane.refresh()
+        self.vm_connect_job = self.start_job('Connect managed VM when ready',lambda runner,delta:LocalBridge(settings,runner).wait_until_ready(address),ready,background=True)
+        self.vm_connect_job.finished.connect(lambda:setattr(self,'vm_connect_job',None))
 
     def refresh_emulator(self):
         settings = dict(self.settings)
@@ -1365,10 +1552,16 @@ class Studio(AgentHost, QMainWindow):
             return
         if self.save_before_switch():
             self.save_conversation()
+            try:self.emulator_pane.shutdown()
+            except Exception as error:
+                self.error(str(error));event.ignore();return
             try:self.javascript_debugger.shutdown()
             except Exception as error:
                 self.error(str(error));event.ignore();return
             self.debugger.shutdown()
+            try:self.updater.launch_on_close()
+            except Exception as error:
+                self.error(str(error));event.ignore();return
             event.accept()
         else:
             event.ignore()

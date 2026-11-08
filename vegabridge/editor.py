@@ -1,7 +1,7 @@
 import re
 from .theme import editor_color
 from PySide6.QtCore import Qt, QRect, QSize, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QSyntaxHighlighter, QTextCharFormat, QTextFormat
+from PySide6.QtGui import QColor, QFont, QPainter, QSyntaxHighlighter, QTextCharFormat, QTextFormat, QTextCursor, QTextDocument
 from PySide6.QtWidgets import QWidget, QPlainTextEdit, QTextEdit
 
 
@@ -148,8 +148,11 @@ class CodeEditor(QPlainTextEdit):
         self.setExtraSelections(selections)
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_Tab and not event.modifiers():
-            self.insertPlainText("  ")
+        if event.key() == Qt.Key.Key_Backtab:
+            self.indent_selection(outdent=True)
+        elif event.key() == Qt.Key.Key_Tab and not event.modifiers():
+            if self.textCursor().hasSelection():self.indent_selection()
+            else:self.insertPlainText("  ")
         elif event.key() in {Qt.Key.Key_Return, Qt.Key.Key_Enter} and not event.modifiers():
             before = self.textCursor().block().text()
             indent = re.match(r"\s*", before).group()
@@ -157,3 +160,66 @@ class CodeEditor(QPlainTextEdit):
             self.insertPlainText(indent + ("  " if before.rstrip().endswith(("{", ":")) else ""))
         else:
             super().keyPressEvent(event)
+
+    def go_to_line(self, line):
+        if not 1<=line<=self.blockCount():
+            raise ValueError(f'Line must be 1–{self.blockCount()}')
+        cursor = self.textCursor()
+        cursor.setPosition(self.document().findBlockByNumber(line-1).position())
+        self.setTextCursor(cursor);self.centerCursor();self.setFocus()
+
+    def change_lines(self, transform):
+        cursor = self.textCursor()
+        first = self.document().findBlock(cursor.selectionStart())
+        end = cursor.selectionEnd()
+        last = self.document().findBlock(end)
+        if cursor.hasSelection() and last.position()==end and last != first:
+            last = last.previous()
+        cursor.setPosition(first.position())
+        cursor.setPosition(last.position()+last.length()-1,QTextCursor.MoveMode.KeepAnchor)
+        text = cursor.selectedText().replace('\u2029','\n')
+        replacement = transform(text.split('\n'))
+        start = cursor.selectionStart()
+        cursor.beginEditBlock();cursor.insertText(replacement);cursor.endEditBlock()
+        cursor.setPosition(start)
+        cursor.setPosition(start+len(replacement.encode('utf-16-le'))//2,QTextCursor.MoveMode.KeepAnchor)
+        self.setTextCursor(cursor)
+
+    def indent_selection(self, outdent=False):
+        def change(lines):
+            return '\n'.join(re.sub(r'^(?: {1,2}|\t)','',line) if outdent else '  '+line for line in lines)
+        self.change_lines(change)
+
+    def toggle_comment(self):
+        suffix = self.path.suffix.lower() if self.path else '.js'
+        if suffix in {'.py','.toml','.yml','.yaml','.cmake'}:
+            prefix = '#'
+        elif suffix in {'.js','.jsx','.ts','.tsx','.c','.cc','.cpp','.cxx','.h','.hh','.hpp'}:
+            prefix = '//'
+        else:
+            raise ValueError('Line comments are supported for JS/TS, C/C++, Python, TOML, YAML and CMake files.')
+        def change(lines):
+            remove = all(not line.strip() or line.lstrip().startswith(prefix) for line in lines)
+            if remove:
+                return '\n'.join(re.sub(r'^(\s*)'+re.escape(prefix)+r' ?',r'\1',line,count=1) for line in lines)
+            return '\n'.join(re.sub(r'^(\s*)',lambda match:match[0]+prefix+' ',line,count=1) if line.strip() else line for line in lines)
+        self.change_lines(change)
+
+    def replace_all(self, query, replacement, match_case=False, whole_words=False):
+        if not query:
+            raise ValueError('Enter text to find')
+        flags = QTextDocument.FindFlag(0)
+        if match_case:flags |= QTextDocument.FindFlag.FindCaseSensitively
+        if whole_words:flags |= QTextDocument.FindFlag.FindWholeWords
+        cursor = QTextCursor(self.document())
+        cursor.beginEditBlock()
+        count = 0
+        try:
+            found = self.document().find(query,0,flags)
+            while not found.isNull():
+                found.insertText(replacement)
+                count += 1
+                found = self.document().find(query,found,flags)
+        finally:
+            cursor.endEditBlock()
+        return count

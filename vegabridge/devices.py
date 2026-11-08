@@ -54,11 +54,56 @@ class LocalBridge:
     def devices(self):
         return parse_devices(self.call(["devices", "-l"], selected=False))
 
-    def connect(self, address):
-        text = self.call(["connect", endpoint(address)], selected=False, timeout=30)
+    def connect(self, address, timeout=30):
+        text = self.call(["connect", endpoint(address)], selected=False, timeout=timeout)
         if "connected to" not in text.lower():
             raise RuntimeError("Device connection was not confirmed. Check Developer Mode, connection mode, network and IP.")
         return text
+
+    def reconnect(self):
+        """Reconnect exactly this network target, never reset the shared ADB server."""
+        address = endpoint(self.serial)
+        if ':' not in self.serial:
+            raise ValueError('USB targets must be reconnected with their data cable; no connection mode is changed.')
+        self.call(['disconnect',address],selected=False,timeout=10)
+        self.connect(address,timeout=15)
+        found = self.devices()
+        if not any(row['serial']==address and row['state']=='device' for row in found):
+            raise RuntimeError('This target is still offline or unauthorized. Check Developer Mode and approve debugging on the device.')
+        return found
+
+    def diagnostics(self):
+        found = self.devices()
+        state = next((row['state'] for row in found if row['serial']==self.serial),'not found')
+        report = {'serial':self.serial,'state':state,'bridgePort':self.port,'changedSettings':False}
+        if state == 'device':
+            report['system'] = self.shell('uname -sm; id -u; df -k /data; printf "\\nVega package service: "; command -v vpm',timeout=12).strip()
+        return report
+
+    def wait_until_ready(self, address, timeout=180):
+        address = endpoint(address)
+        deadline = time.monotonic()+timeout
+        self.runner.emit('Waiting for the managed VM bridge and Vega package service…')
+        last = 'Device has not connected yet'
+        while time.monotonic()<deadline:
+            self.runner.check()
+            try:
+                self.connect(address,timeout=min(8,max(1,deadline-time.monotonic())))
+                rows = self.devices()
+                if any(row['serial']==address and row['state']=='unauthorized' for row in rows):
+                    raise PermissionError('VM debugging needs authorization on its screen.')
+                if any(row['serial']==address and row['state']=='device' for row in rows):
+                    selected = LocalBridge({'adb':self.adb,'bridge_port':self.port},self.runner,address)
+                    selected.shell('vpm list packages >/dev/null',timeout=8)
+                    self.runner.emit('VM READY: authorized device bridge and Vega package service responded.')
+                    return rows
+            except PermissionError:
+                raise
+            except (RuntimeError,OSError,TimeoutError) as error:
+                self.runner.check()
+                last = str(error)
+            self.runner.cancelled.wait(min(2,max(0,deadline-time.monotonic())))
+        raise TimeoutError('VM did not become ready within the connection window. Its data is preserved; retry Connect when boot completes. Last check: '+last)
 
     def shell(self, command, **kwargs):
         # SDK virtual images use legacy shell service naming. An explicit status
@@ -95,12 +140,19 @@ class LocalBridge:
 
     def install(self, path):
         remote = "/tmp/vegabridge-" + uuid.uuid4().hex + ".vpkg"
-        self.push(path, remote)
-        result = self.shell("vpm install " + shlex.quote(remote), timeout=180)
-        if "success" not in result.lower() or re.search(r"\b(fail(?:ed|ure)?|error)\b", result, re.I):
-            raise RuntimeError("Vega installer did not confirm success")
-        self.runner.emit("INSTALL VERIFIED by Vega package manager.")
-        return result
+        try:
+            self.push(path, remote)
+            result = self.shell("vpm install " + shlex.quote(remote), timeout=180)
+            if "success" not in result.lower() or re.search(r"\b(fail(?:ed|ure)?|error)\b", result, re.I):
+                raise RuntimeError("Vega installer did not confirm success")
+            self.runner.emit("INSTALL VERIFIED by Vega package manager.")
+            return result
+        finally:
+            # Only this operation's UUID upload; never remove installed data.
+            try:
+                self.shell('rm -f '+shlex.quote(remote),timeout=5)
+            except Exception:
+                self.runner.emit('Temporary package cleanup could not be confirmed: '+remote)
 
     def launch(self, component):
         if not re.fullmatch(r"[a-zA-Z0-9_.-]+", component):

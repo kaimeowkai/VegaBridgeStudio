@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.0 — Integrated emulator and device workbench
+
+- Original VegaBridge emulator panel with docked and pop-out layouts sharing one managed QEMU VM. Local GPU display mirroring with a bounded latest-frame queue, a refreshed-image fallback, remote buttons, focused-preview keyboard navigation, pause/resume, and identity checks before VM control.
+- Fit the guest display to its engine window. Start/attach waits for an authorized bridge and responding Vega package service before selecting the VM; stopping the VM cancels that connection wait.
+- Private named USB/Wi-Fi connection bookmarks, target inspection, selected-target Wi-Fi reconnect, and offline/authorization guidance. Discovery no longer cancels a wake session when the selected target stays the same. No global bridge reset or device connection-mode changes.
+- Command palette (Ctrl+Shift+P), fuzzy Quick open (Ctrl+P), Go to line (Ctrl+G), current-file replacement with one-step Undo (Ctrl+H), line comments (Ctrl+/), and selected-line indentation/outdent. Build: Ctrl+Shift+B; install/run: Ctrl+F5; emulator: Ctrl+Shift+E.
+- Installation removes only its own temporary package upload and waits for the launched component to become VISIBLE in Vega lifecycle.
+- Public GitHub update checks, Preview/Stable channels and optional automatic download/install on the next clean exit. Verify the GitHub asset digest, checksum file, archive paths and complete installation manifest. A separate portable updater waits for Studio to exit, preserves the previous installation, and restores it if replacement fails. Projects and private per-user state are excluded.
+
+### Android migration assessment prototype
+
+- Read-only Android source/APK assessment through the source CLI, with Android API indicators, dependency inventory, logic-review candidates and a separate migration plan.
+- Bounded input reads, explicit incomplete-scan reporting, private/generated path exclusion and no dependency execution or device changes.
+- Document a source-first Android-to-Vega methodology. This prototype does not execute APKs or translate applications automatically. It was absent from the 0.4.0 executables.
+- Add the native Windows compatibility workbench: source/APK input, separate planning workspace, shared adapter choices/review notes, plan preview and runtime prerequisite observations.
+- Gate workspace creation on before/after source fingerprints; refuse overlapping paths, changed inputs and existing output folders. Original source and signing material are never copied.
+- Add a non-destructive native Binder/KVM version-query sample. Three architectures compile; the actual x86_64 emulator returned Binder protocol 8. This is a research prerequisite, not Android app execution.
+- Extend runtime reports with selected running-kernel configuration, namespace limits and an explicit private-Binder container blocker. Add a bounded child-only namespace/memfd research probe; actual x86_64 developer-context trials returned EPERM for namespace creation, and the checked kernel disables binderfs. No Android runtime or APK execution is implemented.
+
 ## 0.4.0 — Installed apps and JavaScript debugging preview
 
 - Attach Windows CodeLLDB to the current project's installed Vega component. Inspect its native stack, registers and disassembly, then detach without terminating the app. Optional matching project symbols enable native source lookup.

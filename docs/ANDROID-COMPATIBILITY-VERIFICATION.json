@@ -1,0 +1,59 @@
+{
+  "stage": "0.5.0 assessment and planning prototype; no bundled Android runtime",
+  "automatedTestsPassed": 145,
+  "sharedConversionTrack": {
+    "guiInputAssessmentAdapterReviewAndWorkspaceSave": true,
+    "ownerProjectUsedOnlyAsTestInput": true,
+    "originalFilesAndLinksPreserved": 54,
+    "sharedMappingPlanRows": 9,
+    "changedAdapterChoiceNotesAndReviewStatePersisted": true,
+    "separateWorkspaceOnly": true,
+    "sourceOrSigningMaterialCopied": false,
+    "sourceChangedOverlapExistingOutputAndCancellationGatesTested": true,
+    "converterImplemented": false,
+    "adapterImplementationsVerified": false,
+    "ownerAppConvertedBuiltOrInstalled": false
+  },
+  "unchangedApkRuntimeTrack": {
+    "guiPrerequisiteObservationTested": true,
+    "nativeProbeCompiledArchitectures": [
+      "armv7",
+      "aarch64",
+      "x86_64"
+    ],
+    "nativeProbeExecutedArchitecture": "x86_64",
+    "executionContext": "Vega emulator developer shell, UID 5000",
+    "binderCharacterDeviceOpened": true,
+    "binderVersionIoctlSucceeded": true,
+    "binderProtocol": 8,
+    "kvmOpenErrno": 2,
+    "productionAppContextQualified": false,
+    "androidRuntimeBooted": false,
+    "apkExecuted": false,
+    "allAndroidAppsSupported": false,
+    "physicalDeviceRuntimeTested": false,
+    "scope": "Workbench prerequisite observer; no integrated runtime"
+  },
+  "containerInvestigation": {
+    "kernelRelease": "6.1.57-yocto-standard",
+    "privateBinderfsEnabled": false,
+    "memfdDeveloperReadWritePassed": true,
+    "developerShellAndDeveloperComponentNamespaceTrials": "All seven child-only trials returned EPERM",
+    "ordinaryAppProcessSeccomp": 2,
+    "ordinaryAppNativeProbeExecutionQualified": false,
+    "conventionalPrivateBinderContainerReady": false,
+    "kernelOrSecuritySettingsChanged": false,
+    "mountsOrBinderServicesCreated": false
+  },
+  "publication": "0.5.0 includes planning tools and documented research limits; earlier0.4.0 downloads preserved",
+  "privateSoftwareGuestExperiment": {
+    "frameworkBootReported": true,
+    "unchangedApkInstalled": true,
+    "appUiExecutionQualified": false,
+    "physicalKernelOnly128MiBReachedInit": true,
+    "physicalAndroidFrameworkOrApkRan": false,
+    "bundledOrIntegratedAndroidRuntime": false,
+    "lastGraphicsExperiment": "QEMU segmentation fault",
+    "originalApkRewrittenOrResigned": false
+  }
+}

@@ -1,7 +1,7 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "platform": "Windows x64",
-  "automatedTestsPassed": 88,
+  "automatedTestsPassed": 145,
   "inheritedChecksFromUnchanged02Features": {
     "templates": 20,
     "originalGames": 5,
@@ -52,7 +52,7 @@
     "packagedCliApiGenerationWithSpacesVerified": true,
     "packagedCliApmfBuildAndVmExecutionVerified": true
   },
-  "newMilestone": {
+  "inherited04Milestone": {
     "target": "Actual x86_64 Vega VM / SDK 2.0.13986 / React Native 0.83",
     "installedAppNativeAttach": true,
     "nativeStackRegistersAndDisassemblyVerified": true,
@@ -87,5 +87,47 @@
       "vegaButtonActivationByWindowsClick": false,
       "remoteKeyInputWorks": true
     }
+  },
+  "newMilestone": {
+    "target": "Actual x86_64 Vega VM and Windows host",
+    "originalDockedAndPopoutUi": true,
+    "sameVmPidAcrossPopoutAndDock": true,
+    "localGpuMirrorWithLatestFrameMailbox": true,
+    "frameUpdateCapPerSecond": 10,
+    "constantFrameRateOrGamingPerformanceQualified": false,
+    "staticScreenObservation": "One changed frame in five seconds; not a dynamic-frame-rate benchmark",
+    "desktopMonitorCaptureUsed": false,
+    "framesSentToAssistant": false,
+    "popoutRemoteChangedSyntheticAppValue": 24,
+    "vmInputIndependentOfPhysicalToolbarTarget": true,
+    "vmPauseResumeAndPausedInputRefusal": true,
+    "vmReadinessRequiresBridgeAndPackageService": true,
+    "physicalWifiInspectionAndSyntheticFileRoundTrip": true,
+    "physicalUsbQualified": false,
+    "noPhysicalAppsChanged": true,
+    "namedConnectionBookmarks": true,
+    "droppedTargetNeverSilentlyRedirected": true,
+    "commandPaletteQuickOpenAndEditorOperations": true,
+    "publicGitHubUpdateCheck": true,
+    "previewAndStableUpdateChannels": true,
+    "automaticUpdateOptionalOnCleanExit": true,
+    "sha256ChecksumAndInstallManifestVerification": true,
+    "frozenPortableWorkerSyntheticSwapPassed": true,
+    "failedSwapRollbackRegressionPassed": true,
+    "previousInstallationRetained": true,
+    "sourceCheckoutInstallDisabled": true,
+    "packagedGuiFinalVerification": {
+      "exeOpened": true,
+      "commandPaletteLaunchedVm": true,
+      "automaticBridgeAndPackageReadiness": true,
+      "localGpuDisplayRendered": true,
+      "popoutRemoteLaunchedActualVegaApp": true,
+      "dockedBackWithoutVmRestart": true,
+      "updateDialogAndGuardedButtons": true
+    },
+    "allEarlierReleaseDownloadsPreserved": true,
+    "androidAutomaticConversionOrUnchangedApkExecution": false,
+    "androidPlanningToolsOnly": true,
+    "nativeWindowReparentingQualified": false
   }
 }

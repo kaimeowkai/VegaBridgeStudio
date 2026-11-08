@@ -15,6 +15,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Icon build failed.' }
     & $studioPython -m PyInstaller --noconfirm --clean --distpath $studioOutput VegaBridgeStudio.spec
     if ($LASTEXITCODE -ne 0) { throw 'Executable build failed.' }
+    & $studioPython -m PyInstaller --noconfirm --clean --onefile --noupx --name VegaBridgeUpdater --paths $studioRoot --workpath 'build\updater' --specpath 'build\updater-spec' --distpath (Join-Path $studioOutput 'VegaBridgeStudio') scripts/update_helper.py
+    if ($LASTEXITCODE -ne 0) { throw 'Portable updater build failed.' }
+    & (Join-Path $studioOutput 'VegaBridgeStudio\VegaBridgeUpdater.exe') --help
+    if ($LASTEXITCODE -ne 0) { throw 'Portable updater smoke test failed.' }
     $smokeProcess = Start-Process -FilePath (Join-Path $studioOutput 'VegaBridgeStudio\VegaBridgeStudio.exe') -ArgumentList '--smoke-test' -WindowStyle Hidden -PassThru
     if (-not $smokeProcess.WaitForExit(20000)) { Stop-Process -Id $smokeProcess.Id; throw 'Packaged executable did not finish its smoke test.' }
     if ($smokeProcess.ExitCode -ne 0) { throw 'Packaged executable smoke test failed.' }

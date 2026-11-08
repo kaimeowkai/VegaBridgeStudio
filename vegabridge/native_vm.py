@@ -38,6 +38,7 @@ class NativeVm:
         self.settings = dict(settings)
         self.monitor_port = None
         self.pid = None
+        self.device_port = int(settings['vm_port'])
         self.display_name = "VegaBridge " + uuid.uuid4().hex[:8] + " — Vega OS"
         self.window_title = "QEMU (" + self.display_name + ")"
 
@@ -49,6 +50,7 @@ class NativeVm:
         if actual.get('name')!=state['name']:raise RuntimeError('VM identity changed; refusing another process.')
         vm=cls(settings)
         vm.pid=state['pid'];vm.monitor_port=state['monitorPort'];vm.display_name=state['name'];vm.window_title=state['windowTitle']
+        vm.device_port=int(state.get('devicePort',settings['vm_port']))
         if vm.window_title!='QEMU ('+vm.display_name+')':raise RuntimeError('Invalid managed VM display identity.')
         return vm
 
@@ -57,7 +59,7 @@ class NativeVm:
             raise RuntimeError("The VM display is not ready yet.")
         destination = Path(destination).resolve()
         try:
-            qmp_command(self.monitor_port, "screendump", {"filename": str(destination), "format": "png"})
+            self.command("screendump", {"filename": str(destination), "format": "png"})
         except RuntimeError as error:
             if "no surface" not in str(error):
                 raise
@@ -68,6 +70,13 @@ class NativeVm:
         if not destination.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"):
             raise RuntimeError("VM display capture did not produce a complete PNG")
         return str(destination)
+
+    def command(self, command, arguments=None):
+        if command not in {'query-status','query-kvm','screendump','stop','cont','quit'}:
+            raise ValueError('Unsupported managed VM operation')
+        if not self.monitor_port or qmp_command(self.monitor_port,'query-name').get('name') != self.display_name:
+            raise RuntimeError('VM identity changed; refusing to control another session.')
+        return qmp_command(self.monitor_port,command,arguments)
 
     def run(self, runner):
         from PySide6.QtCore import QLockFile
@@ -88,7 +97,7 @@ class NativeVm:
 
     def _started(self,pid):
         self.pid=pid
-        atomic_write(user_dir()/'native-vm-session.json',json.dumps({'pid':pid,'name':self.display_name,'monitorPort':self.monitor_port,'windowTitle':self.window_title}).encode())
+        atomic_write(user_dir()/'native-vm-session.json',json.dumps({'pid':pid,'name':self.display_name,'monitorPort':self.monitor_port,'windowTitle':self.window_title,'devicePort':int(self.settings['vm_port'])}).encode())
 
     def _run_owned(self, runner):
         qemu = Path(tool_path(self.settings["qemu"], "qemu-system-x86_64.exe"))
@@ -137,7 +146,7 @@ class NativeVm:
                     "-m", "4096", "-smp", "2", "-kernel", images / "bzImage", "-initrd", images / "initramfs.cpio.gz",
                     "-append", "console=ttyS0 loglevel=4 boot.root_rw=y androidboot.slot_suffix=_a video=Virtual-1:1920x1080@60",
                     "-drive", "file=" + str(overlay).replace(",", ",,") + ",format=qcow2,if=virtio",
-                    "-device", "virtio-vga-gl,xres=1920,yres=1080", "-display", "gtk,gl=on",
+                    "-device", "virtio-vga-gl,xres=1920,yres=1080", "-display", "gtk,gl=on,zoom-to-fit=on,show-menubar=off",
                     "-serial", "stdio", "-monitor", "none", "-qmp", f"tcp:127.0.0.1:{monitor_port},server=on,wait=off",
                     "-nic", f"user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:{port}-:5555"]
             runner.emit("Starting a native Windows Vega VM. Source images are read-only; guest writes go to " + str(overlay))
@@ -150,7 +159,7 @@ class NativeVm:
 
 
 def managed_vm_command(command):
-    if command not in {'query-status','quit'}:
+    if command not in {'query-status','query-kvm','stop','cont','quit'}:
         raise ValueError('Unsupported VM command')
     state=json.loads((user_dir()/'native-vm-session.json').read_text())
     if not state['name'].startswith('VegaBridge '):
