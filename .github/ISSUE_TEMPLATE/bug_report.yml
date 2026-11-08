@@ -1,0 +1,13 @@
+name: Bug report
+description: Report a reproducible problem without private SDK files or credentials.
+body:
+  - type: textarea
+    attributes:
+      label: What happened?
+      description: Include version, steps and expected behavior. Remove private device details and credentials.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Sanitized output
+      description: Do not include API keys, signing keys, account tokens or proprietary SDK files.

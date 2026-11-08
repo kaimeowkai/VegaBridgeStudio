@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vegabridge-studio"
+version = "0.1.0"
+description = "Community Windows workbench for Vega app development"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = ["PySide6==6.10.1", "cryptography==50.0.2", "zstandard==0.25.0", "flatbuffers==25.12.19", "httpx==0.28.1", "windows-capture==2.0.1", "numpy==2.5.4", "opencv-python==5.0.0.93"]
+
+[project.optional-dependencies]
+dev = ["pytest==9.0.2", "pyinstaller==6.17.0"]
+
+[project.scripts]
+vegabridge-studio = "vegabridge.app:main"
+
+[tool.setuptools.packages.find]
+include = ["vegabridge*"]
+
+[tool.setuptools.package-data]
+vegabridge = ["resources/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

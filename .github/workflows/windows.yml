@@ -1,0 +1,31 @@
+name: Windows review build
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Create environment
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install -r requirements-build.lock
+          .\.venv\Scripts\python.exe -m pip install -e . --no-deps
+      - name: Test and package
+        shell: pwsh
+        run: .\scripts\build-windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VegaBridgeStudio-Windows-review
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+            dist/Build-Receipt.json
