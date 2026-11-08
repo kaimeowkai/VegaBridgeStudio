@@ -90,7 +90,7 @@ def tool_path(configured, name):
     return str(Path(found).resolve())
 
 
-def build(root, settings, runner):
+def build(root, settings, runner, debug=False):
     from .package import pack
     root = Path(root).resolve()
     cfg = json.loads((root / "vegabridge.json").read_text(encoding="utf-8"))
@@ -120,6 +120,11 @@ def build(root, settings, runner):
             raise ValueError("Refusing to clean a linked staging directory.")
         shutil.rmtree(resolved)
     (stage / "bundle").mkdir(parents=True)
-    runner.run([node, npm, "run", "bundle"], cwd=root, env=env, timeout=900)
+    if debug:
+        entry=next((name for name in ['index.tsx','index.ts','index.js'] if (root/name).is_file()),None)
+        if not entry:raise ValueError('Development builds require an index.js, index.ts or index.tsx entry file')
+        runner.run([node,root/'node_modules/react-native/cli.js','bundle','--platform','kepler','--dev','true',
+            '--entry-file',entry,'--bundle-output','stage/bundle/index.bundle','--assets-dest','stage/bundle/assets','--max-workers','4'],cwd=root,env=env,timeout=900)
+    else:runner.run([node, npm, "run", "bundle"], cwd=root, env=env, timeout=900)
     runner.check()
-    return pack(root, runner.emit)
+    return pack(root, runner.emit,development=debug)

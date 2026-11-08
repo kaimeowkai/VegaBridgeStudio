@@ -18,9 +18,10 @@ class NativeDebugPane(QWidget):
     completed=Signal(object)
     debugEvent=Signal(object)
 
-    def __init__(self,studio):
+    def __init__(self,studio,javascript=False):
         super().__init__(studio)
         self.studio=studio
+        self.javascript=javascript
         self.pool=ThreadPoolExecutor(max_workers=2,thread_name_prefix='VegaDebug')
         self.session=None
         self.busy=False
@@ -32,10 +33,13 @@ class NativeDebugPane(QWidget):
         self.completed.connect(self._completed)
         self.debugEvent.connect(self._event)
         layout=QVBoxLayout(self)
-        intro=QLabel('Native C/C++ source debugging • Launches a separate developer executable in the selected target. Existing apps and global device security settings are unchanged.')
-        intro.setWordWrap(True);layout.addWidget(intro)
+        self.intro=QLabel('Native C/C++ source debugging • Launch a developer executable or attach to this project’s installed app. Global device security settings remain unchanged.')
+        self.intro.setWordWrap(True);layout.addWidget(self.intro)
+        self.mode=QComboBox();self.mode.addItems(['Launch developer executable','Attach installed project app'])
+        if not javascript:layout.addWidget(self.mode)
+        else:self.mode.hide()
         row=QHBoxLayout();self.binary=QLineEdit();self.binary.setPlaceholderText('Native executable inside the current project');row.addWidget(self.binary)
-        browse=QPushButton('Choose executable…');browse.clicked.connect(self.choose_binary);row.addWidget(browse);layout.addLayout(row)
+        self.browse=QPushButton('Choose executable…');self.browse.clicked.connect(self.choose_binary);row.addWidget(self.browse);layout.addLayout(row)
         row=QHBoxLayout();self.arch=QComboBox();self.arch.addItems(['x86_64','armv7','aarch64']);row.addWidget(self.arch)
         self.compile=QPushButton('Compile current C/C++ with symbols');self.compile.clicked.connect(self.compile_current);row.addWidget(self.compile)
         toggle=QPushButton('Toggle cursor breakpoint');toggle.clicked.connect(self.toggle_breakpoint);row.addWidget(toggle);layout.addLayout(row)
@@ -51,8 +55,19 @@ class NativeDebugPane(QWidget):
         split=QSplitter();self.stack=QTreeWidget();self.stack.setHeaderLabels(['Call stack','Source']);self.stack.setColumnWidth(0,210);self.stack.itemClicked.connect(self.select_frame);split.addWidget(self.stack)
         self.locals=QTreeWidget();self.locals.setHeaderLabels(['Variable','Value','Type']);self.locals.setColumnWidth(0,170);self.locals.itemExpanded.connect(self.expand_variable);split.addWidget(self.locals);panels.addWidget(split);panels.setSizes([210,170]);layout.addWidget(panels)
         self.output=QPlainTextEdit();self.output.setReadOnly(True);self.output.setMaximumBlockCount(3000);self.output.setMaximumHeight(95);layout.addWidget(self.output)
-        self.sdk=SdkPane(studio,self.pool)
+        self.sdk=SdkPane(studio,self.pool) if not javascript else None
+        self.mode.currentIndexChanged.connect(self.mode_changed)
         self.refresh_controls()
+
+    def mode_changed(self,index):
+        if self.javascript:return
+        self.binary.clear();attached=index==1
+        self.binary.setPlaceholderText('Optional matching project library/executable with native symbols' if attached else 'Native executable inside the current project')
+        self.browse.setText('Optional symbols…' if attached else 'Choose executable…')
+        self.launch.setText('Attach installed app' if attached else 'Start native debugger')
+        self.stop.setText('Detach; keep app running' if attached else 'Stop debugger')
+        self.compile.setVisible(not attached);self.arch.setVisible(not attached)
+        self.status.setText('Install/run this project’s app first. Detaching resumes the app; matching unstripped symbols enable native source breakpoints.' if attached else 'Compile the current source with symbols, then launch its native executable.')
 
     def task(self,fn,done,allow_busy=False):
         if self.busy and not allow_busy:return
@@ -82,6 +97,7 @@ class NativeDebugPane(QWidget):
         self.launch.setEnabled(not active and not self.busy)
         self.compile.setEnabled(not active and not self.busy)
         self.binary.setReadOnly(active or self.busy);self.arch.setEnabled(not active and not self.busy)
+        self.mode.setEnabled(not active and not self.busy)
         self.stop.setEnabled(active and not self.stopping)
         for name,control in self.controls.items():
             control.setEnabled(active and not self.busy and not self.stopping and not self.exited and (self.running if name=='pause' else not self.running))
@@ -106,7 +122,7 @@ class NativeDebugPane(QWidget):
         if editor:editor.toggle_breakpoint()
 
     def breakpoints_changed(self,editor):
-        if self.session and not self.busy and editor.path:
+        if self.session and not self.busy and editor.path and (self.javascript or editor.path.suffix in {'.c','.cpp','.cc','.cxx','.h','.hpp'}):
             path=editor.path;lines=sorted(editor.breakpoints)
             self.task(lambda:self.session.set_breakpoints(path,lines),lambda r:self.status.setText('Breakpoints: '+json.dumps(r)))
 
@@ -124,12 +140,15 @@ class NativeDebugPane(QWidget):
             serial=target.get('serial','')
             if target.get('kind')=='Remote VVD':self.status.setText('Choose a local USB/TCP target for native debugging.');return
         else:serial=target
-        try:self.session=NativeDebugSession(self.studio.project,self.binary.text(),self.studio.settings,serial,self.debugEvent.emit)
+        try:
+            from .installed_debug import InstalledAppDebugSession
+            session_type=InstalledAppDebugSession if self.mode.currentIndex()==1 else NativeDebugSession
+            self.session=session_type(self.studio.project,self.binary.text(),self.studio.settings,serial,self.debugEvent.emit)
         except Exception as error:self.status.setText(str(error));return
         points={}
         for i in range(self.studio.editors.count()):
             e=self.studio.editors.widget(i)
-            if getattr(e,'path',None) and getattr(e,'breakpoints',None):points[str(e.path)]=sorted(e.breakpoints)
+            if getattr(e,'path',None) and e.path.suffix in {'.c','.cpp','.cc','.cxx','.h','.hpp'} and getattr(e,'breakpoints',None):points[str(e.path)]=sorted(e.breakpoints)
         session=self.session
         def started(result):
             unresolved=sum(not point.get('verified',False) for point in result['breakpoints'])
@@ -202,7 +221,13 @@ class NativeDebugPane(QWidget):
 
     def show_source(self,frame):
         source=frame.get('source',{}).get('path')
-        if not source:return
+        if not source:
+            self.clear_position();self.source.clear();self.source.breakpoints=set();self.source_title.setText(frame.get('name','Frame')+' · no mapped project source. Add matching symbols or step back to project code.')
+            reference=frame.get('source',{}).get('sourceReference')
+            if reference and self.session and hasattr(self.session,'source_for_frame') and not self.busy:
+                session=self.session
+                self.task(lambda:session.source_for_frame(frame),lambda text:self.source.setPlainText(text))
+            return
         try:path=inside(self.studio.project,Path(source))
         except ValueError:return
         self.studio.open_file(path)
@@ -222,7 +247,7 @@ class NativeDebugPane(QWidget):
         self.task(session.close,self._stop_done,allow_busy=True)
 
     def _stop_done(self,_):
-        self.session=None;self.running=False;self.stopping=False;self.clear_position();self.stack.clear();self.locals.clear();self.status.setText('Debugger stopped; session-owned processes and bridge forwarding cleaned up.')
+        self.session=None;self.running=False;self.stopping=False;self.clear_position();self.stack.clear();self.locals.clear();self.status.setText('Detached; installed app resumed. Owned debugger resources cleaned up.' if self.mode.currentIndex()==1 else 'Debugger stopped; session-owned processes and bridge forwarding cleaned up.')
 
     def shutdown(self):
         self.closed=True

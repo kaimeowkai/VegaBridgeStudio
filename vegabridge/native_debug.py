@@ -150,6 +150,11 @@ class NativeDebugSession:
     def variables(self,reference):
         return self.dap.request('variables',{'variablesReference':reference,'start':0,'count':200}).get('variables',[])[:200]
 
+    def source_for_frame(self,frame):
+        reference=frame.get('source',{}).get('sourceReference')
+        if not reference:return ''
+        return self.dap.request('source',{'sourceReference':reference}).get('content','')[:1000000]
+
     def control(self,command):
         if command not in {'continue','pause','next','stepIn','stepOut'}:raise ValueError('Unknown debug control')
         if not self.thread_id:raise ValueError('Wait for a stopped thread before controlling the debugger')

@@ -302,7 +302,14 @@ class Studio(AgentHost, QMainWindow):
         toolbar.addAction("Refresh devices", self.refresh_devices)
         toolbar.addSeparator()
         toolbar.addAction("Settings", self.show_settings)
+        assistant_action=toolbar.addAction("Show assistant",self.show_assistant)
+        assistant_action.setShortcut("Ctrl+Shift+A")
         self.cancel_action = toolbar.addAction("Cancel tasks", self.cancel_tasks)
+
+    def show_assistant(self):
+        dock=self.findChild(QDockWidget,'assistant-dock')
+        if dock:
+            dock.show();dock.raise_();self.prompt.setFocus()
 
     def _create_workspace(self):
         self.center = QTabWidget()
@@ -410,12 +417,21 @@ class Studio(AgentHost, QMainWindow):
         self.debugger=NativeDebugPane(self)
         self.center.addTab(self.debugger,'Native debugger')
         self.center.addTab(self.debugger.sdk,'SDK browser')
+        from .js_debug_panel import JavaScriptDebugPane
+        self.javascript_debugger=JavaScriptDebugPane(self)
+        self.center.addTab(self.javascript_debugger,'JavaScript debugger')
         debug_menu=self.menuBar().addMenu('Debug')
-        for title,key,fn in [('Start / Continue','F5',lambda:self.debugger.control('continue') if self.debugger.session else self.debugger.start()),
-                ('Toggle breakpoint','F9',self.debugger.toggle_breakpoint),('Step over','F10',lambda:self.debugger.control('next')),
-                ('Step into','F11',lambda:self.debugger.control('stepIn')),('Step out','Shift+F11',lambda:self.debugger.control('stepOut')),
-                ('Stop debugger','Shift+F5',self.debugger.stop_session)]:
+        for title,key,fn in [('Start / Continue','F5',lambda:self.active_debugger().control('continue') if self.active_debugger().session else self.active_debugger().start()),
+                ('Toggle breakpoint','F9',lambda:self.active_debugger().toggle_breakpoint()),('Step over','F10',lambda:self.active_debugger().control('next')),
+                ('Step into','F11',lambda:self.active_debugger().control('stepIn')),('Step out','Shift+F11',lambda:self.active_debugger().control('stepOut')),
+                ('Stop debugger','Shift+F5',lambda:self.active_debugger().stop_session())]:
             action=QAction(title,self);action.setShortcut(key);action.triggered.connect(fn);debug_menu.addAction(action)
+
+    def active_debugger(self):
+        if self.center.currentWidget() is self.debugger:return self.debugger
+        editor=self.current_editor()
+        if self.center.currentWidget() is self.javascript_debugger or (self.center.currentIndex()==0 and editor and editor.path.suffix in {'.js','.jsx','.ts','.tsx'}):return self.javascript_debugger
+        return self.debugger
 
     def _create_project_dock(self):
         dock = QDockWidget("PROJECT", self)
@@ -761,6 +777,11 @@ class Studio(AgentHost, QMainWindow):
         if hasattr(self,'debugger') and self.debugger.session:
             QMessageBox.information(self,'Debugger active','Stop the native debugger before changing projects.')
             return
+        if hasattr(self,'javascript_debugger') and self.javascript_debugger.session:
+            QMessageBox.information(self,'Debugger active','Detach the JavaScript debugger before changing projects.')
+            return
+        if hasattr(self,'javascript_debugger') and self.javascript_debugger.metro:
+            self.javascript_debugger.metro.close();self.javascript_debugger.metro=None
         if any(not job.background and not (allow_agent and job is self.ai_job) for job in self.jobs):
             QMessageBox.information(self, "Tasks running", "Finish or cancel running tasks before changing projects.")
             return
@@ -815,6 +836,7 @@ class Studio(AgentHost, QMainWindow):
             editor.document().modificationChanged.connect(lambda dirty: self.mark_dirty(editor, dirty))
             editor.cursorPositionChanged.connect(self.cursor_info)
             editor.breakpointsChanged.connect(lambda lines,e=editor:self.debugger.breakpoints_changed(e))
+            editor.breakpointsChanged.connect(lambda lines,e=editor:self.javascript_debugger.breakpoints_changed(e))
         except Exception as error:
             self.error(str(error))
 
@@ -1329,6 +1351,8 @@ class Studio(AgentHost, QMainWindow):
             self.apply.setEnabled(False)
 
     def closeEvent(self, event):
+        if self.javascript_debugger.session:
+            self.javascript_debugger.stop_session();self.statusBar().showMessage('Detaching JavaScript debugger. Close again after cleanup finishes.');event.ignore();return
         if self.debugger.session:
             self.debugger.stop_session()
             self.statusBar().showMessage('Stopping native debugger. Close again after cleanup finishes.')
@@ -1341,6 +1365,9 @@ class Studio(AgentHost, QMainWindow):
             return
         if self.save_before_switch():
             self.save_conversation()
+            try:self.javascript_debugger.shutdown()
+            except Exception as error:
+                self.error(str(error));event.ignore();return
             self.debugger.shutdown()
             event.accept()
         else:

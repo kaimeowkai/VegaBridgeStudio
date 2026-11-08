@@ -78,6 +78,18 @@ class LocalBridge:
     def push(self, local, remote):
         return self.call(["push", str(local), remote], timeout=180)
 
+    def component_shell(self,component,command,**kwargs):
+        if not re.fullmatch(r'[a-z][a-z0-9_]*(?:\.[a-zA-Z0-9_]+){2,}',component) or component.startswith('com.amazon.'):
+            raise ValueError('Choose your own installed developer component, not an Amazon system component')
+        marker='__VEGABRIDGE_RC_'+uuid.uuid4().hex+'__'
+        if '\n' in command or '\r' in command:raise ValueError('Component commands must fit on one shell line')
+        wrapped='( '+command+' ); vb_rc=$?; printf "\\n'+marker+'%s\\n" "$vb_rc"'
+        text=self.call(['shell','-x','component-id',component,wrapped],quiet=True,**kwargs)
+        match=re.search(r'\r*\n'+re.escape(marker)+r'([0-9]+)\r*\n?\s*$',text)
+        if not match:raise RuntimeError('Component shell returned no exit status; result is unknown')
+        if int(match[1]):raise DeviceCommandError(match[1],text[:match.start()])
+        return text[:match.start()]
+
     def pull(self, remote, local):
         return self.call(["pull", remote, str(local)], timeout=180)
 

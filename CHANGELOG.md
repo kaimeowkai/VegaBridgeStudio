@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0 — Installed apps and JavaScript debugging preview
+
+- Attach Windows CodeLLDB to the current project's installed Vega component. Inspect its native stack, registers and disassembly, then detach without terminating the app. Optional matching project symbols enable native source lookup.
+- JavaScript/TypeScript/JSX source breakpoints, stepping, stack, locals and console evaluation through the installed app's Hermes inspector. Metro source maps show original project files; mismatched running bundles and stale source are refused.
+- Separate development VPKGs preserve release output and signing identity. Studio owns its loopback Metro child, chooses a free host port, and manages only its own device reverse mapping. Per-app debug-launch timeout protection supports long breakpoint pauses; stopping owned Metro clears that setting for subsequent normal launches.
+- Restore the assistant with the toolbar's **Show assistant** button or **Ctrl+Shift+A**. Include an actual Studio screenshot with the default assistant introduction and synthetic debugging data.
+- Fix development-server logging lifetime, strip terminal escape sequences, and retain explicit cleanup errors for disconnected targets.
+
+Qualified on the actual x86_64 Vega VM. ARM installed-app attachment, app-owned C++ module source symbols, hot reload and full React Native DevTools are not qualified by this release. Existing 0.1.0–0.3.0 downloads remain available.
+
 ## 0.3.0 — Native debugging and API tools preview
 
 - Native source breakpoints, continue/pause, stepping, call stack, source preview, locals and expandable registers through Windows CodeLLDB and a matching target lldb-server.

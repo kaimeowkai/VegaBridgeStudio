@@ -30,3 +30,5 @@ shiboken6==6.10.1
 typing_extensions==4.16.0
 windows-capture==2.0.1
 zstandard==0.25.0
+
+websocket-client==1.9.2

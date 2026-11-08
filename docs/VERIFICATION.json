@@ -1,27 +1,7 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "platform": "Windows x64",
-  "automatedTestsPassed": 67,
-  "newMilestone": {
-    "sourceDebugging": "Standalone developer executables only",
-    "target": "Actual x86_64 Vega VM / SDK 2.0.13986",
-    "adapter": "CodeLLDB 1.12.3 / LLDB 22.1.8",
-    "guiCompileLaunchBreakpointStepStopVerified": true,
-    "localBeforeStep": 12,
-    "localAfterStep": 24,
-    "nativeBackendExitCode": 0,
-    "windowsApmfGeneratedFiles": 455,
-    "apmfBaseLibraryProgramExecuted": true,
-    "individualPlatformServicesVerified": false,
-    "installedAppNativeAttach": false,
-    "javaScriptSourceDebugger": false,
-    "sdkOriginalsPreserved": true,
-    "proprietarySdkMaterialsBundled": false,
-    "furtherPhysicalTestingWaived": true,
-    "packagedGuiBreakpointStepAndSourcePreviewVerified": true,
-    "packagedCliApiGenerationWithSpacesVerified": true,
-    "packagedCliApmfBuildAndVmExecutionVerified": true
-  },
+  "automatedTestsPassed": 88,
   "inheritedChecksFromUnchanged02Features": {
     "templates": 20,
     "originalGames": 5,
@@ -51,5 +31,61 @@
     "completeSdkApiOrDebuggerParity": false,
     "physicalUsbSessionClaimed": false
   },
-  "privacy": "Personal conversations, account records, API/OAuth keys, private logs, SDK binaries and guest images are excluded; release export audits compare against app-owned private state without printing it."
+  "privacy": "Personal conversations, account records, API/OAuth keys, private logs, SDK binaries and guest images are excluded; release export audits compare against app-owned private state without printing it.",
+  "inherited03Milestone": {
+    "sourceDebugging": "Standalone developer executables only",
+    "target": "Actual x86_64 Vega VM / SDK 2.0.13986",
+    "adapter": "CodeLLDB 1.12.3 / LLDB 22.1.8",
+    "guiCompileLaunchBreakpointStepStopVerified": true,
+    "localBeforeStep": 12,
+    "localAfterStep": 24,
+    "nativeBackendExitCode": 0,
+    "windowsApmfGeneratedFiles": 455,
+    "apmfBaseLibraryProgramExecuted": true,
+    "individualPlatformServicesVerified": false,
+    "installedAppNativeAttach": false,
+    "javaScriptSourceDebugger": false,
+    "sdkOriginalsPreserved": true,
+    "proprietarySdkMaterialsBundled": false,
+    "furtherPhysicalTestingWaived": true,
+    "packagedGuiBreakpointStepAndSourcePreviewVerified": true,
+    "packagedCliApiGenerationWithSpacesVerified": true,
+    "packagedCliApmfBuildAndVmExecutionVerified": true
+  },
+  "newMilestone": {
+    "target": "Actual x86_64 Vega VM / SDK 2.0.13986 / React Native 0.83",
+    "installedAppNativeAttach": true,
+    "nativeStackRegistersAndDisassemblyVerified": true,
+    "perComponentTimeoutProtectionPausedSeconds": 90,
+    "sameNativeProcessSurvivedDetach": true,
+    "javaScriptHermesSourceDebugger": true,
+    "guiOriginalSourceBreakpointStepEvaluateDetach": true,
+    "localBeforeStep": 12,
+    "localAfterStep": 24,
+    "separateDevelopmentPackagePreservesRelease": true,
+    "loopbackMetroFreePortAndReverseMappingVerified": true,
+    "assistantRestoreControlVerified": true,
+    "studioScreenshotUsesSyntheticDataAndDefaultAssistantIntro": true,
+    "packagedGuiVerification": {
+      "developmentBuildInstallLaunchAndLifecycle": true,
+      "originalSourceBreakpointAndStep": true,
+      "consoleEvaluationResult": 24,
+      "nativeAttachRegistersDisassemblyDetach": true,
+      "assistantShortcutRestoresDock": true,
+      "metroLogsContinueAfterBuildJobEnds": true,
+      "responsiveQaAppLayoutVisuallyChecked": true,
+      "normalDebugLaunchCleanup": "Verified through Stop owned Metro"
+    },
+    "hotReloadQualified": false,
+    "armInstalledAttachmentQualified": false,
+    "appOwnedCppSourceModuleQualified": false,
+    "completeReactNativeDevToolsParity": false,
+    "proprietarySdkMaterialsBundled": false,
+    "furtherPhysicalTestingWaived": true,
+    "qemuMouseInput": {
+      "device": "PS/2 relative mouse",
+      "vegaButtonActivationByWindowsClick": false,
+      "remoteKeyInputWorks": true
+    }
+  }
 }

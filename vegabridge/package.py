@@ -104,7 +104,7 @@ def write_package(files, key, cert, destination):
         temp.unlink(missing_ok=True)
 
 
-def pack(root, emit=print, identity_base=None):
+def pack(root, emit=print, identity_base=None, development=False):
     root = Path(root)
     pkg = metadata(root)
     files = {"manifest.toml": (root / "manifest.toml").read_bytes()}
@@ -114,6 +114,7 @@ def pack(root, emit=print, identity_base=None):
         raise ValueError("Kepler 4 system module ID is missing. Verify the Windows Metro path patch before packaging.")
     files["bundle/assets/app.json"] = (root / "app.json").read_bytes()
     config = {"schemaVersion": 1, "mainBundle": "index.bundle", "developmentEnabled": False, "linkLaunch": [], "linkDynamic": [], "appLibraries": [], "runtimeFeatures": {}, "systemBundles": {"common": ["index.amzn__react-native-kepler-4.hermes.bundle"]}}
+    config['developmentEnabled']=bool(development)
     files["assets/raw/keplerscript-app-config.json"] = json.dumps(config, separators=(",", ":")).encode()
     files["assets/kepler-sdk-version"] = b"2.0.13986"
     files["assets/asset-index.bin"] = asset_index(files)
@@ -121,11 +122,12 @@ def pack(root, emit=print, identity_base=None):
     key, cert = identity(pkg["id"], identity_base)
     out = root / "build"
     out.mkdir(exist_ok=True)
-    destination = out / (pkg["id"] + "-armv7.vpkg")
+    destination = out / (pkg["id"] + ('-debug.vpkg' if development else '-armv7.vpkg'))
     write_package(files, key, cert, destination)
     result = inspect_package(destination)
     receipt = {"createdUtc": dt.datetime.now(dt.timezone.utc).isoformat(), "packageId": pkg["id"], "component": pkg["component"], "version": pkg["version"], "buildNumber": pkg["build-number"], "certificateSha256": cert.fingerprint(hashes.SHA256()).hex(), "vpkgSha256": result["sha256"], "experimentalJsOnly": True, "deviceInstallVerified": False, "physicalLaunchVerified": False, "customNativeModulesSupported": False}
-    atomic_write(out / "Build-Receipt.json", json.dumps(receipt, indent=2).encode())
+    receipt['developmentEnabled']=bool(development)
+    atomic_write(out / ('Debug-Build-Receipt.json' if development else 'Build-Receipt.json'), json.dumps(receipt, indent=2).encode())
     emit("Package built and digest checked: " + str(destination))
     emit("Development signature; device testing and Appstore validation are separate steps.")
     return str(destination)

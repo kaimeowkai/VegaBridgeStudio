@@ -2,7 +2,9 @@
 
 A native Windows workbench for creating and testing Amazon Vega apps: editor, project templates, real Vega VM host, USB/Wi-Fi device tools and an integrated coding assistant.
 
-**0.3.0 is an independent community developer preview.** It runs its host tools directly on Windows. It requires your own Amazon SDK target files and virtual-device images for SDK and emulator features. It is not affiliated with Amazon or OpenAI and does not redistribute Amazon's SDK.
+**0.4.0 is an independent community developer preview.** It runs its host tools directly on Windows. It requires your own Amazon SDK target files and virtual-device images for SDK and emulator features. It is not affiliated with Amazon or OpenAI and does not redistribute Amazon's SDK.
+
+![Actual Studio JavaScript debugging with the development assistant visible](docs/screenshots/studio-overview.png)
 
 ## Start on Windows
 
@@ -46,7 +48,7 @@ This remains a partial Windows host-tool implementation, not a complete binary c
 
 ## Native debugging and platform APIs
 
-Use the **Native debugger** tab for C/C++ breakpoints, stepping, stack, source and locals in a separate developer executable. **SDK browser** searches external API contracts and headers. **Tools → Generate platform API C++ bindings** runs the SDK APMF compiler natively on Windows with a private compatibility adapter. Debugger and API tools are configured on their own Settings pages. See [setup, examples and tested limits](docs/NATIVE-DEBUGGING.md). Installed-app attachment and JavaScript source debugging remain future work.
+Use **Native debugger** to launch a C/C++ developer executable or attach to the current project's installed app. The **JavaScript debugger** tab builds a development app and connects directly to its Hermes runtime, with original JS/TS/JSX source breakpoints, stepping, stack, locals and console evaluation. Release packaging keeps debugging disabled. **SDK browser** searches external API contracts and headers; **Tools → Generate platform API C++ bindings** runs the SDK APMF compiler natively on Windows. See [native setup and tested limits](docs/NATIVE-DEBUGGING.md) and [JavaScript debugging](docs/JAVASCRIPT-DEBUGGING.md).
 
 ## Ten included themes
 
@@ -56,6 +58,6 @@ Harbor Dark, Matrix, Daylight, Midnight Blue, Solar Ember, Orchid Night, Forest 
 
 The gallery includes 15 useful app starters and five original games with distinct visual directions and local interaction. See [the sample gallery](docs/SAMPLE-GALLERY.md), [version history](CHANGELOG.md), [SDK port notes](docs/WINDOWS-SDK-PORT.md) and [security notes](SECURITY.md). Screenshots are actual emulator captures of synthetic sample projects.
 
-Both [0.1.0](https://github.com/kaimeowkai/VegaBridgeStudio/releases/tag/v0.1.0) and [0.2.0](https://github.com/kaimeowkai/VegaBridgeStudio/releases/tag/v0.2.0) have separate release notes and downloads. Those archived downloads are preserved. [0.3.0](https://github.com/kaimeowkai/VegaBridgeStudio/releases/tag/v0.3.0) adds native debugging and platform API tools while retaining ChatGPT sign-in, assistant tools and the redesigned gallery.
+The [0.1.0](https://github.com/kaimeowkai/VegaBridgeStudio/releases/tag/v0.1.0), [0.2.0](https://github.com/kaimeowkai/VegaBridgeStudio/releases/tag/v0.2.0) and [0.3.0](https://github.com/kaimeowkai/VegaBridgeStudio/releases/tag/v0.3.0) downloads are preserved with separate release notes. [0.4.0](https://github.com/kaimeowkai/VegaBridgeStudio/releases/tag/v0.4.0) adds installed-app attachment and JavaScript debugging while retaining ChatGPT sign-in, assistant tools, ten themes and the redesigned gallery. Restore a hidden assistant with **Show assistant** or **Ctrl+Shift+A**.
 
-To build from source, use Python 3.12 on Windows, create `.venv`, install `.[dev]`, run `python -m pytest -q`, then `scripts/build-windows.ps1 -OutputDirectory dist-v0.3.0`. Third-party notices accompany the portable package. Original project code is MIT licensed.
+To build from source, use Python 3.12 on Windows, create `.venv`, install `.[dev]`, run `python -m pytest -q`, then `scripts/build-windows.ps1 -OutputDirectory dist-v0.4.0`. Third-party notices accompany the portable package. Original project code is MIT licensed.

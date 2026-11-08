@@ -10,13 +10,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DIST = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT / "dist"
 APP = DIST / "VegaBridgeStudio"
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 
 
 def notices():
     folder = APP / "licenses"
     folder.mkdir(exist_ok=True)
-    names = ["PySide6", "PySide6_Essentials", "PySide6_Addons", "shiboken6", "cryptography", "cffi", "pycparser", "zstandard", "flatbuffers", "httpx", "httpcore", "anyio", "h11", "idna", "certifi", "typing_extensions", "pyinstaller", "windows-capture", "numpy", "opencv-python", "PyJWT"]
+    names = ["PySide6", "PySide6_Essentials", "PySide6_Addons", "shiboken6", "cryptography", "cffi", "pycparser", "zstandard", "flatbuffers", "httpx", "httpcore", "anyio", "h11", "idna", "certifi", "typing_extensions", "pyinstaller", "windows-capture", "numpy", "opencv-python", "PyJWT", "websocket-client"]
     manifest = []
     for name in names:
         dist = md.distribution(name)

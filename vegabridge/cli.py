@@ -31,7 +31,7 @@ def main(argv=None):
     create.add_argument('--id',required=True)
     create.add_argument('--template',default='')
     create.add_argument('--language',choices=['JavaScript','TypeScript'],default='JavaScript')
-    build=sub.add_parser('build');build.add_argument('folder',type=Path)
+    build=sub.add_parser('build');build.add_argument('folder',type=Path);build.add_argument('--debug',action='store_true')
     check=sub.add_parser('validate');check.add_argument('package',type=Path)
     install=sub.add_parser('install');install.add_argument('package',type=Path);install.add_argument('--device',required=True);install.add_argument('--launch',default='')
     run=sub.add_parser('run');run.add_argument('component');run.add_argument('--device',required=True)
@@ -53,7 +53,7 @@ def main(argv=None):
             result={'project':str(create_project(args.folder,args.title,args.id,args.template,args.language))}
         elif args.command=='build':
             from .project import build
-            result={'package':build(args.folder,settings,runner)}
+            result={'package':build(args.folder,settings,runner,debug=args.debug)}
         elif args.command=='devices':
             from .devices import LocalBridge
             result=LocalBridge(settings,runner).devices()

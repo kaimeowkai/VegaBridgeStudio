@@ -30,5 +30,12 @@ def test_native_workbench_opens_source_saves_and_displays_device_types(tmp_path,
     settings = SettingsDialog(window.settings, window)
     assert settings.fields["model"].text()
     settings.reject()
+    from PySide6.QtWidgets import QDockWidget
+    assistant=window.findChild(QDockWidget,'assistant-dock');assistant.hide();window.show_assistant()
+    assert not assistant.isHidden()
+    editor=window.editors.widget(0)
+    frame={'name':'App','source':{'path':str(root/'index.js')},'line':1}
+    window.javascript_debugger.show_source(frame)
+    assert window.javascript_debugger.source.toPlainText()==editor.toPlainText()
     window.close()
     app.processEvents()

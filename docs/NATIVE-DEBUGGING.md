@@ -1,6 +1,6 @@
 # Native debugging and platform APIs
 
-Studio 0.3.0 adds a Windows source debugger for a **separate C/C++ developer executable**. It does not yet attach to an installed React Native app or provide JavaScript/Hermes breakpoints. SDK 2.0.13986, an x86_64 Vega VM and CodeLLDB 1.12.3 / LLDB 22.1.8 were used for the end-to-end checks.
+Studio 0.4.0 supports both a **separate C/C++ developer executable** and **attachment to the current project's installed app**. JavaScript/Hermes has its own [debugger tab and guide](JAVASCRIPT-DEBUGGING.md). SDK 2.0.13986, an x86_64 Vega VM and CodeLLDB 1.12.3 / LLDB 22.1.8 were used for the end-to-end checks.
 
 ## Configure external tools
 
@@ -18,6 +18,16 @@ The Windows and Linux server packages must use the same LLDB version. Do not poi
 6. **Stop debugger** cleans up its own target/server processes, bridge-forward mapping and remote temporary directory. Stop before changing projects. The emulator and unrelated apps remain running.
 
 The developer program runs in its own `/tmp` directory under Developer Mode privileges, rather than inside an installed application's identity or permissions. It must be an executable; a shared library needs a developer harness. The debugger's TCP endpoints bind to loopback. Studio does not change global ptrace, sandbox, SELinux, ASLR or device sleep settings. Debugging may alter timing and program execution. Debug artifacts and session copies are private local files; they are not included in release exports.
+
+## Attach to the current project's installed app
+
+1. Install and run your project's development app on the selected local USB/TCP target. For a React Native app, **JavaScript debugger → Build + run development app** also configures per-app breakpoint timeout protection. Keep that owned Metro session running while testing either debugger. Otherwise, use Amazon's documented `vlcm debug <component-id> --disable-app-timeout` before launching your app. An unprepared app can be terminated by Vega's heartbeat watchdog while paused.
+2. Select **Attach installed project app** in **Native debugger**. Optionally select a matching unstripped project library or executable for source symbols. The field may be empty to inspect registers, stack and disassembly.
+3. Click **Attach installed app**. Studio verifies the current project's lifecycle instance, enters that component's developer shell namespace, and attaches its own matching LLDB server to the app process. It does not attach to Amazon system components.
+4. Continue/pause or inspect the stopped stack and registers. Source breakpoints require matching loaded native code and unstripped symbols; JavaScript locations belong in the JavaScript debugger instead. The x86_64 check qualifies native attachment and disassembly, not source symbols in an app-owned TurboModule.
+5. **Detach; keep app running** resumes and disconnects from the app. Studio removes only its own server, adapter, forwarding and scratch directory. Finish by stopping owned Metro; this clears that component's debug-launch overrides. Relaunch normally for normal timeout behavior. If you prepared it manually, run `vlcm debug <component-id> --clear` yourself and relaunch.
+
+The GUI and backend inspected an actual installed x86_64 app. With the per-app timeout protection prepared before launch, the process survived a long native breakpoint pause and detach. Individual platform service calls, ARM attachment and app-owned C++ source-module integration require further qualification. For timeout details, see [Amazon's debugging issue guide](https://www.developer.amazon.com/docs/vega/0.24/debugger-issues).
 
 ## Generate and use APMF C++ bindings on Windows
 
@@ -54,4 +64,4 @@ The generator runs Windows Java and Windows Clang. A private JAR copy substitute
 - The native Windows IDL path generated 455 files for APMF and device-config packages. A C++ program using the generated APMF headers and `libapmf` printed `WINDOWS_VEGA_API_OK 19` in the VM and exited successfully.
 - This checks APMF base-library interoperability. It does **not** qualify invoking the device-config service, installed app components, TurboModule lifecycle attachment, media/DRM/IAP services or privileged APIs. Those require declared contracts, appropriate app identity, SDK-specific integration and runtime tests.
 
-Amazon's platform-specific workflow remains the reference for installed-app debugging: [official debugging documentation](https://developer.amazon.com/docs/vega/2.0/debugger). Studio's new path reduces the native Windows gap without claiming complete SDK parity.
+Amazon's platform-specific workflow remains the reference for platform debugging: [official debugging documentation](https://developer.amazon.com/docs/vega/2.0/debugger). Studio reduces the native Windows gap without claiming complete SDK parity.
